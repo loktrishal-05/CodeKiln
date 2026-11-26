@@ -1,0 +1,23 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Size guard (no tracked file over 1 MB)
+        run: |
+          big=$(git ls-files -z | xargs -0 du -k | awk '$1 > 1024 {print $2}')
+          if [ -n "$big" ]; then echo "Files over 1 MB:"; echo "$big"; exit 1; fi
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: mypy
+      - run: pytest

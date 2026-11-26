@@ -1,0 +1,74 @@
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+
+# --- Factory runtime output (generated, never commit) ---
+# cloned / supplied target repos
+/workspaces/
+/repos/
+/runs/
+/staging/
+# generated Harbor task packages
+/packages/
+/reports/
+factory_report.html
+billing_ledger.csv
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+ctrf*.json
+*.log
+
+# --- Big / binary artifacts ---
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.7z
+*.whl
+*.mp4
+*.mov
+*.gif
+*.pdf
+*.pptx
+*.docx
+*.onnx
+*.safetensors
+*.bin
+
+# --- Node (TypeScript adapter, later) ---
+node_modules/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Local-only scratch ---
+scratch/
+tmp/
+*.local
+.claude/settings.local.json
