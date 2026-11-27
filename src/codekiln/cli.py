@@ -22,7 +22,7 @@ def _todo(name: str) -> None:
 def run(
     repo: str,
     slots: int = typer.Option(6, min=1),  # the six click planner subsystems
-    max_budget_usd: float = 5.0,
+    max_budget_usd: float = 5.0,  # accepted, not used here: the breaker lives in `synth` / `resume`
     workdir: Path = Path("workspaces"),
 ) -> None:
     """Plan task candidates from REPO (git URL, directory or zip) and record them in the ledger.

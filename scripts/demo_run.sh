@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="https://github.com/pallets/click"
-SLOTS=5
+SLOTS=6  # one per click subsystem; spare slots absorb gate rejections on the way to 5 packages
 RUNS=3
 MAX_BUDGET_USD="5.00"
 OUT_DIR="runs/demo"
@@ -17,7 +17,7 @@ Run the CodeKiln pipeline end-to-end and emit Harbor packages + HTML report.
 
 Options:
   --repo URL_OR_PATH      Target git URL, dir, or zip (default: https://github.com/pallets/click)
-  --slots N               Number of candidate task slots (default: 5)
+  --slots N               Number of candidate task slots (default: 6)
   --runs N                3-state gate repeat count (default: 3)
   --max-budget-usd USD    Hard LLM budget breaker in USD (default: 5.00)
   --model NAME            Model name recorded on receipts (default: CODEKILN_LLM_MODEL or gpt-4o-mini)
