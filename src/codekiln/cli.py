@@ -45,6 +45,30 @@ def verify(package: str) -> None:
     _todo("verify")
 
 
+@app.command(name="spec-check")
+def spec_check(spec: Path, out: Path | None = None) -> None:
+    """Validate a synthesizer FeatureSpec (JSON) and write its RTM map.
+
+    This is the contract writers (LLMs, fixtures) must satisfy: docs/SYNTHESIS.md.
+    """
+    from codekiln.synthesis.models import SynthesisError, load_spec, validate
+    from codekiln.synthesis.rtm import write_map
+
+    dst = out or spec.with_name("rtm_map.json")
+    try:
+        s = load_spec(spec)
+        validate(s)
+        m = write_map(dst, s)
+    except (OSError, SynthesisError) as e:
+        typer.echo(f"spec rejected: {e}", err=True)
+        raise typer.Exit(1) from e
+    typer.echo(f"{s.task}: {len(s.requirements)} REQ, {len(s.f2p)} F2P -> {dst}")
+    if not m.ok:
+        for p in m.problems:
+            typer.echo(f"  RTM: {p}", err=True)
+        raise typer.Exit(1)
+
+
 @app.command(name="eval")
 def eval_(package: str, model: str) -> None:
     """Blind-evaluate MODEL against PACKAGE in a separate verifier container."""
