@@ -13,7 +13,7 @@ from pathlib import Path
 
 from codekiln.billing.ledger import Budget, BudgetExceeded
 from codekiln.packaging.harbor import PackageError
-from codekiln.planner.models import load_plan
+from codekiln.planner.models import Plan, load_plan
 from codekiln.states import State
 from codekiln.synthesis.emit import write_package
 from codekiln.synthesis.llm_router import RouterError, Writer
@@ -39,6 +39,18 @@ class SynthSummary:
     skipped: int = 0  # already past DIVERSITY_OK
     stopped: str = ""  # hard stop reason (e.g. budget exhausted)
     packages: list[Path] = field(default_factory=list)
+
+
+def build_plan(plan_json: str, workspace: Path | None) -> Plan:
+    """The stored slot plus, when a checkout exists, the workspace (edits apply to it) and Repo Scout pack."""
+    plan = load_plan(plan_json)
+    if workspace is not None:
+        plan = replace(plan, workspace=str(workspace))
+        try:  # the pack is a hint: a repo it cannot read must not block synthesis
+            plan = replace(plan, context=context_pack(workspace, plan.files))
+        except (OSError, ValueError):
+            pass
+    return plan
 
 
 def synthesize(
@@ -78,13 +90,7 @@ def synthesize(
                 out.stopped = f"BUDGET_EXCEEDED: {e}"
                 break
         try:
-            plan = load_plan(plan_json)
-            if workspace is not None:
-                plan = replace(plan, workspace=str(workspace))  # edits are applied to this checkout
-                try:  # the pack is a hint: a repo it cannot read must not block synthesis
-                    plan = replace(plan, context=context_pack(workspace, plan.files))
-                except (OSError, ValueError):
-                    pass
+            plan = build_plan(plan_json, workspace)
             spec = writer.write(plan, repo=repo_url, base_commit=base_commit)
             validate(spec)  # the task name becomes a path: check it before it is used (and rmtree'd)
         except BudgetExceeded as e:

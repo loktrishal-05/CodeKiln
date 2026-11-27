@@ -4,6 +4,7 @@
 3-state gate (State A), and the packager fills it in. Staging, receipt and manifest stay with the
 packager item; this only proves the synthesizer's shape is packagable.
 """
+import json
 from pathlib import Path
 
 from codekiln.packaging.harbor import write_task
@@ -36,4 +37,8 @@ def write_package(
         license=license,
     )
     write_map(task / "rtm_map.json", spec)
+    # The spec this package was built from (provenance, and the starting point for a repair).
+    (task / "spec.json").write_text(
+        json.dumps(spec.to_dict(), indent=1), encoding="utf-8", newline="\n"
+    )
     return task

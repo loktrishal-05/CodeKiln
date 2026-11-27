@@ -74,7 +74,10 @@ FORMAT (checked by code):
    {"op": "append", "path": P, "code": "..."} | {"op": "new_file", "path": P, "code": "..."}.
    Use only paths and symbol names that appear in the context pack. Edits only ADD code (never
    rewrite existing code) and never touch tests/, conftest.py or CI files.
-5. "task" is kebab-case with at least two words, e.g. "click-json-param"."""
+5. "task" is kebab-case with at least two words, e.g. "click-json-param".
+6. Import inside the new function, not at the top of the module, any module the file does not already
+   import: libraries often test that importing the package stays light (a new top-level `import json`
+   made such a test fail on a real run). Write tests that assert exact values and error cases."""
 
 _RULES = """\
 Rules (violations are rejected before packaging):
