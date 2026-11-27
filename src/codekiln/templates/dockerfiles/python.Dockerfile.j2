@@ -1,0 +1,28 @@
+FROM python:{{ python_version }}-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    VIRTUAL_ENV=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 codekiln \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /bin/bash codekiln \
+    && python -m venv /opt/venv \
+    && chown -R codekiln:codekiln /opt/venv
+
+WORKDIR /workspace
+COPY --chown=codekiln:codekiln . /workspace
+
+USER codekiln
+
+{% for cmd in install_commands %}
+RUN {{ cmd }}
+{% endfor %}
+RUN python -m pip show pytest >/dev/null 2>&1 || python -m pip install --no-cache-dir pytest
+
+CMD {{ test_command_json }}
