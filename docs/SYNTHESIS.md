@@ -5,9 +5,9 @@ The synthesizer's whole job is to turn one `Plan` into one `FeatureSpec`. Everyt
 the shape is fixed here before the LLM router lands. This page is the contract Cholan and Harsha
 wire against; `src/codekiln/synthesis/models.py` is the executable version.
 
-Status: **contract + router** — shape, validation, RTM gate, package emitter and the
-OpenAI-compatible writer are in; pipeline wiring is next. `codekiln spec-check` accepts a
-hand-written spec today, so nobody is blocked.
+Status: **synthesis wired** — contract, RTM gate, package emitter, provider router and the pipeline
+stage (`DIVERSITY_OK -> SYNTHESIZED`) are in. Blind-reader linter, mutation probes and the eval
+runner are next.
 
 ## What consumes what
 
@@ -87,9 +87,12 @@ Gate: `RTM_OK` only when `ok` is true. `spec-check` and `write_package` enforce 
 ```console
 codekiln spec-check path/to/spec.json          # writes rtm_map.json next to it
 codekiln spec-check path/to/spec.json --out x.json
+codekiln synth RUN_ID --packages packages      # writes one Harbor package per candidate
 ```
 
-Exit 1 prints every problem, not just the first.
+`spec-check` exits 1 printing every problem. `synth` needs a host-only
+`CODEKILN_LLM_API_KEY`; it reuses plans persisted on `task_plans`, skips candidates already past
+`DIVERSITY_OK`, retries failures up to three runs, then dead-letters them with a reason.
 
 ## Module map
 
@@ -100,6 +103,8 @@ Exit 1 prints every problem, not just the first.
 | `synthesis/emit.py` | `write_package`: validate + RTM + `packaging.harbor.write_task` |
 | `synthesis/spec_generator.py` | deterministic contract-first prompt for the writer |
 | `synthesis/llm_router.py` | OpenAI-compatible client, JSON parsing, bounded repair |
+| `synthesis/runner.py` | `DIVERSITY_OK -> SYNTHESIZED` / `REJECTED`, spec hash, dead-letter |
+| `planner/models.py` | `dump_plan` / `load_plan` for fresh-process resume |
 
 ## Provider
 
@@ -110,10 +115,10 @@ rejection reason appended; it never records its own success.
 
 ## Next (in order)
 
-1. Pipeline wiring: `DIVERSITY_OK -> SYNTHESIZED` (or `REJECTED` + reason in the ledger), plus
-   `codekiln synth --run-id` for a fresh checkout.
-2. Mutation probes: four classes, each a Harbor trial with a swapped `solution/`.
+1. Blind-reader linter: dry-run check on the agent-visible instruction, then `BLIND_READER_OK`.
+2. Mutation probes: four classes, each a Harbor trial with a swapped `solution/`, >=80% semantic kill.
 3. Cost ledger, budget breaker and idempotent resume.
+4. Blind eval runner + `eval_receipt.json` (2+ models).
 
 ## Team asks
 

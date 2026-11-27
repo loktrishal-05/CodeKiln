@@ -36,7 +36,53 @@ def run(
         raise typer.Exit(1) from e
     typer.echo(f"run {s.run_id}: base_commit {s.base_commit[:12]}, workspace {s.workspace}")
     typer.echo(f"{s.new} new + {s.existing} existing candidates at {State.DIVERSITY_OK}")
-    typer.echo("stopped: synthesis/gates/packaging not implemented. See docs/ROADMAP.md.")
+    typer.echo(f"next: codekiln synth {s.run_id}  (gates and packaging still pending)")
+
+
+@app.command()
+def synth(
+    run_id: int,
+    db: Path | None = None,
+    packages: Path = Path("packages"),
+    model: str | None = None,
+    base_url: str | None = None,
+    max_attempts: int = typer.Option(3, min=1),
+) -> None:
+    """Synthesize RUN_ID's DIVERSITY_OK candidates into Harbor packages.
+
+    Needs CODEKILN_LLM_API_KEY (and optionally _MODEL/_BASE_URL); the key stays on the host.
+    """
+    from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError
+    from codekiln.synthesis.runner import synthesize
+
+    settings = Settings()
+    ledger = db or Path(settings.db_path)
+    if not ledger.exists():
+        typer.echo(f"No ledger at {ledger}. Run `codekiln run <repo>` first.", err=True)
+        raise typer.Exit(2)
+    try:
+        config = ModelConfig(
+            base_url=base_url or settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            model=model or settings.llm_model,
+        )
+    except RouterError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    con = connect(str(ledger))
+    try:
+        s = synthesize(con, run_id, LLMWriter(config), packages, max_attempts)
+    except ValueError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    typer.echo(
+        f"run {run_id}: {s.synthesized} synthesized, {s.failed} retryable,"
+        f" {s.rejected} rejected, {s.skipped} skipped"
+    )
+    for p in s.packages:
+        typer.echo(f"  {p}")
+    if s.synthesized == 0 and (s.failed or s.rejected):
+        raise typer.Exit(1)
 
 
 @app.command()

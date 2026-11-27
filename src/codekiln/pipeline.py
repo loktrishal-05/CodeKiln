@@ -14,6 +14,7 @@ from codekiln.ingestion.repo_loader import load_repo
 from codekiln.planner import plan
 from codekiln.planner.difficulty import balance, level
 from codekiln.planner.diversity_guard import fingerprint
+from codekiln.planner.models import dump_plan
 from codekiln.states import State
 
 MODE = "dual"
@@ -58,11 +59,18 @@ def run_pipeline(source: str, slots: int, con: sqlite3.Connection, workdir: Path
         assert run_id is not None
         new = 0
         for i, p in enumerate(chosen):
+            key = idempotency_key(source, commit, MODE, i)
             cur = con.execute(
                 "INSERT OR IGNORE INTO task_candidates (run_id, idempotency_key, category, difficulty,"
                 " ast_fingerprint, status) VALUES (?, ?, ?, ?, ?, ?)",
-                (run_id, idempotency_key(source, commit, MODE, i), p.category.value, level(p),
-                 fingerprint(p), State.DIVERSITY_OK.value),
+                (run_id, key, p.category.value, level(p), fingerprint(p), State.DIVERSITY_OK.value),
             )
             new += cur.rowcount
+            candidate_id = con.execute(
+                "SELECT id FROM task_candidates WHERE idempotency_key = ?", (key,)
+            ).fetchone()[0]
+            con.execute(
+                "INSERT OR IGNORE INTO task_plans (candidate_id, plan_json) VALUES (?, ?)",
+                (candidate_id, dump_plan(p)),
+            )
     return RunSummary(run_id, commit, ws, new, len(chosen) - new)
