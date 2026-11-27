@@ -91,6 +91,8 @@ def validate(spec: FeatureSpec) -> None:
 
     if not spec.reference_diff.startswith(_DIFF_HEADER):
         raise SynthesisError("reference_diff must be a git diff starting with 'diff --git '")
+    if patch_err := _bad_patch(spec.reference_diff):
+        raise SynthesisError(f"reference_diff is not a well-formed patch: {patch_err}")
     if not _ADDED.search(spec.reference_diff):
         raise SynthesisError("reference_diff must add the feature (no added lines found)")
     if deleted := _DELETED_FILE.findall(spec.reference_diff):
@@ -107,6 +109,13 @@ def validate(spec: FeatureSpec) -> None:
     for r in spec.requirements:
         if not r.statement.strip():
             raise SynthesisError(f"{r.id} has an empty statement")
+
+
+def _bad_patch(diff: str) -> str:
+    """Hunk header counts vs body: the cheap part of "does it apply" (the gate runs the real thing)."""
+    from codekiln.validation.mutation_probe import patch_problem  # lazy: avoids an import cycle
+
+    return patch_problem(diff)
 
 
 def from_dict(raw: Mapping[str, object]) -> FeatureSpec:

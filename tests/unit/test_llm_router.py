@@ -231,3 +231,20 @@ def test_repair_requests_do_not_grow_with_each_attempt() -> None:
     final = [m["content"] for m in last_messages[-1]]
     assert sum(c.startswith("Rejected:") for c in final) == 1  # only the latest rejection reason
     assert "garbage attempt 3" in final and "garbage attempt 1" not in final  # earlier failures are dropped
+
+
+def test_every_repair_message_restates_the_format_rules() -> None:
+    from codekiln.synthesis.spec_generator import FORMAT_RULES
+
+    seen: list[str] = []
+
+    def post(url: str, headers: dict[str, str], payload: dict[str, object]) -> Mapping[str, object]:
+        messages = payload["messages"]
+        assert isinstance(messages, list)
+        seen.append(messages[-1]["content"])
+        return reply("not json")
+
+    with pytest.raises(SynthesisError):
+        LLMWriter(CONFIG, post=post, retries=2).write(PLAN, repo="click", base_commit="abc")
+    repairs = seen[1:]  # the first call carries the prompt itself
+    assert len(repairs) == 2 and all(FORMAT_RULES in r and r.startswith("Rejected:") for r in repairs)

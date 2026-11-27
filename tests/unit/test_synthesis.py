@@ -17,7 +17,7 @@ _spec = make_spec
 
 
 def _touch(path: str) -> str:
-    return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1,2 @@\n+x = 1\n"
+    return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -0,0 +1 @@\n+x = 1\n"
 
 
 def test_valid_spec_survives_json_roundtrip() -> None:
@@ -154,3 +154,33 @@ def test_prompt_names_the_slot_and_wraps_repo_text() -> None:
     assert "src/click/utils.py" in prompt and "echo" in prompt
     assert "<untrusted_repo_content>" in prompt and prompt.count("</untrusted_repo_content>") == 1
     assert "REQ-1" in prompt and "api_cli" in prompt
+
+
+def test_the_prompts_worked_example_is_itself_a_valid_spec() -> None:
+    """The example teaches the model the format; if it ever stopped passing our own gates it would
+    teach something invalid, so it is held to validate + the RTM audit + the blind reader."""
+    from codekiln.synthesis.models import from_dict
+    from codekiln.synthesis.rtm import require_ok
+    from codekiln.synthesis.spec_generator import EXAMPLE_SPEC
+    from codekiln.validation.blind_reader import lint_instruction
+
+    spec = from_dict(EXAMPLE_SPEC)
+    validate(spec)
+    require_ok(spec)
+    assert lint_instruction(spec.instruction).ok
+
+
+def test_the_prompt_states_the_format_and_no_longer_contradicts_it() -> None:
+    from codekiln.planner.models import Category, Plan
+    from codekiln.synthesis.spec_generator import FORMAT_RULES, render_prompt
+
+    plan = Plan(Category.API_CLI, frozenset({"src/click/utils.py"}), frozenset({"echo"}), "forward")
+    prompt = render_prompt(plan, repo="click", base_commit="abc")
+    assert FORMAT_RULES in prompt and "- REQ-1: <statement>" in prompt and "click-echo-uppercase" in prompt
+    assert "Feature tests go to tests/feature/" not in prompt  # it told the model to write tests/feature/ ids
+
+
+def test_a_reference_diff_with_wrong_hunk_counts_is_rejected_with_a_reason_the_model_can_act_on() -> None:
+    bad = DIFF.replace("@@ -1 +1,2 @@", "@@ -1 +1,9 @@")  # claims 9 new lines, the body has 2
+    with pytest.raises(SynthesisError, match="not a well-formed patch"):
+        validate(_spec(reference_diff=bad))
