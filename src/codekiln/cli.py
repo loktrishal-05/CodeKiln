@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from typing import Protocol
 
 import typer
 
@@ -39,6 +40,80 @@ def run(
     typer.echo(f"next: codekiln synth {s.run_id}  (gates and packaging still pending)")
 
 
+class _SynthResult(Protocol):
+    synthesized: int
+    failed: int
+    rejected: int
+    skipped: int
+    stopped: str
+    packages: list[Path]
+
+
+def _synth_run(
+    run_id: int,
+    db: Path,
+    packages: Path,
+    model: str | None,
+    base_url: str | None,
+    max_attempts: int,
+    max_budget_usd: float | None,
+    ledger_csv: Path | None,
+) -> tuple[_SynthResult, list[str], float]:
+    """One shared synthesis path for `synth` and `resume`, metered by the cost ledger."""
+    from codekiln.billing.ledger import BillingLedger, Budget, Pricing
+    from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError, http_post
+    from codekiln.synthesis.runner import synthesize
+
+    settings = Settings()
+    if not db.exists():
+        raise ValueError(f"No ledger at {db}. Run `codekiln run <repo>` first.")
+    try:
+        config = ModelConfig(
+            base_url=base_url or settings.llm_base_url,
+            api_key=settings.llm_api_key,
+            model=model or settings.llm_model,
+        )
+    except RouterError as e:
+        raise ValueError(str(e)) from e
+    pricing = Pricing(settings.llm_input_usd_per_1k, settings.llm_output_usd_per_1k)
+    bills = BillingLedger(ledger_csv or Path(settings.billing_ledger), pricing)
+    budget = Budget(
+        bills, run_id, settings.max_budget_usd if max_budget_usd is None else max_budget_usd,
+        config.model, pricing,
+    )
+    con = connect(str(db))
+    try:
+        writer = LLMWriter(config, post=budget.meter_post(http_post))
+        summary = synthesize(con, run_id, writer, packages, max_attempts, budget)
+        reasons = [
+            r for (r,) in con.execute(
+                "SELECT rejection_reason FROM task_candidates"
+                " WHERE run_id = ? AND rejection_reason IS NOT NULL ORDER BY id",
+                (run_id,),
+            )
+        ]
+        return summary, reasons, bills.spent(run_id)
+    finally:
+        con.close()
+
+
+def _report_synth(run_id: int, summary: _SynthResult, reasons: list[str], spent: float) -> None:
+    stopped = summary.stopped
+    typer.echo(
+        f"run {run_id}: {summary.synthesized} synthesized, {summary.failed} retryable,"
+        f" {summary.rejected} rejected, {summary.skipped} skipped, ${spent:.4f} spent"
+    )
+    for reason in reasons:
+        typer.echo(f"  reject: {reason}", err=True)
+    for p in summary.packages:
+        typer.echo(f"  {p}")
+    if stopped:
+        typer.echo(f"  stopped: {stopped}", err=True)
+        raise typer.Exit(1)
+    if summary.synthesized == 0 and (summary.failed or summary.rejected):
+        raise typer.Exit(1)
+
+
 @app.command()
 def synth(
     run_id: int,
@@ -47,48 +122,47 @@ def synth(
     model: str | None = None,
     base_url: str | None = None,
     max_attempts: int = typer.Option(3, min=1),
+    max_budget_usd: float | None = None,
+    ledger_csv: Path | None = None,
 ) -> None:
     """Synthesize RUN_ID's DIVERSITY_OK candidates into Harbor packages.
 
     Needs CODEKILN_LLM_API_KEY (and optionally _MODEL/_BASE_URL); the key stays on the host.
+    A hard --max-budget-usd breaker stops the run before the next provider call.
     """
-    from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError
-    from codekiln.synthesis.runner import synthesize
-
     settings = Settings()
-    ledger = db or Path(settings.db_path)
-    if not ledger.exists():
-        typer.echo(f"No ledger at {ledger}. Run `codekiln run <repo>` first.", err=True)
-        raise typer.Exit(2)
     try:
-        config = ModelConfig(
-            base_url=base_url or settings.llm_base_url,
-            api_key=settings.llm_api_key,
-            model=model or settings.llm_model,
+        summary, reasons, spent = _synth_run(
+            run_id, db or Path(settings.db_path), packages, model, base_url, max_attempts,
+            max_budget_usd, ledger_csv,
         )
-    except RouterError as e:
-        typer.echo(str(e), err=True)
-        raise typer.Exit(2) from e
-    con = connect(str(ledger))
-    try:
-        s = synthesize(con, run_id, LLMWriter(config), packages, max_attempts)
     except ValueError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(2) from e
-    typer.echo(
-        f"run {run_id}: {s.synthesized} synthesized, {s.failed} retryable,"
-        f" {s.rejected} rejected, {s.skipped} skipped"
-    )
-    for (reason,) in con.execute(
-        "SELECT rejection_reason FROM task_candidates WHERE run_id = ? AND rejection_reason IS NOT NULL"
-        " ORDER BY id",
-        (run_id,),
-    ):
-        typer.echo(f"  reject: {reason}", err=True)
-    for p in s.packages:
-        typer.echo(f"  {p}")
-    if s.synthesized == 0 and (s.failed or s.rejected):
-        raise typer.Exit(1)
+    _report_synth(run_id, summary, reasons, spent)
+
+
+@app.command()
+def resume(
+    run_id: int,
+    db: Path | None = None,
+    packages: Path = Path("packages"),
+    max_attempts: int = typer.Option(3, min=1),
+    max_budget_usd: float | None = None,
+    ledger_csv: Path | None = None,
+) -> None:
+    """Resume RUN_ID from a fresh checkout: skip finished slots, retry failures, dead-letter poison."""
+    settings = Settings()
+    try:
+        summary, reasons, spent = _synth_run(
+            run_id, db or Path(settings.db_path), packages, None, None, max_attempts,
+            max_budget_usd, ledger_csv,
+        )
+    except ValueError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    typer.echo(f"resume {run_id}: {summary.skipped} finished slots skipped")
+    _report_synth(run_id, summary, reasons, spent)
 
 
 @app.command(name="blind-read")

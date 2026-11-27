@@ -11,6 +11,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from codekiln.billing.ledger import Budget, BudgetExceeded
 from codekiln.packaging.harbor import PackageError
 from codekiln.planner.models import load_plan
 from codekiln.states import State
@@ -35,6 +36,7 @@ class SynthSummary:
     failed: int = 0  # retryable; candidate stays DIVERSITY_OK
     rejected: int = 0  # dead-lettered after MAX_ATTEMPTS
     skipped: int = 0  # already past DIVERSITY_OK
+    stopped: str = ""  # hard stop reason (e.g. budget exhausted)
     packages: list[Path] = field(default_factory=list)
 
 
@@ -44,6 +46,7 @@ def synthesize(
     writer: Writer,
     packages: Path,
     max_attempts: int = MAX_ATTEMPTS,
+    budget: Budget | None = None,
 ) -> SynthSummary:
     run = con.execute(
         "SELECT r.url, r.base_commit FROM factory_runs f JOIN repositories r ON r.id = f.repo_id"
@@ -64,8 +67,19 @@ def synthesize(
             _reject(con, cid, "no persisted plan; re-run `codekiln run` on this repo")
             out.rejected += 1
             continue
+        if budget is not None:
+            budget.start_candidate(cid)
+            try:
+                budget.guard()
+            except BudgetExceeded as e:
+                # Progress so far is committed; remaining candidates stay DIVERSITY_OK for resume.
+                out.stopped = f"BUDGET_EXCEEDED: {e}"
+                break
         try:
             spec = writer.write(load_plan(plan_json), repo=repo_url, base_commit=base_commit)
+        except BudgetExceeded as e:
+            out.stopped = f"BUDGET_EXCEEDED: {e}"
+            break
         except (SynthesisError, RouterError, OSError, ValueError) as e:
             _fail(con, out, cid, attempts, e, max_attempts)
             continue
