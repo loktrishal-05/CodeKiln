@@ -392,7 +392,7 @@ def probe(
         except BudgetExceeded as e:
             typer.echo(f"stopped: BUDGET_EXCEEDED: {e}", err=True)
             raise typer.Exit(1) from e
-        except (adv.AdversarialError, OSError) as e:
+        except (adv.AdversarialError, RouterError, OSError) as e:  # RouterError: provider down
             typer.echo(f"adversarial proposal failed: {e}", err=True)
             raise typer.Exit(2) from e
         adv.report_rejected(rejected, work / package.name / "adversarial_rejected.json")
