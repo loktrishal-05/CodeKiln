@@ -165,6 +165,74 @@ def resume(
     _report_synth(run_id, summary, reasons, spent)
 
 
+@app.command(name="test-critic")
+def test_critic(
+    package: Path,
+    run_id: int,
+    alternatives: int = typer.Option(1, min=1),
+    work: Path = Path("critic-work"),
+    out: Path = Path("test_critic.json"),
+    db: Path | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    max_budget_usd: float | None = None,
+    ledger_csv: Path | None = None,
+) -> None:
+    """Stress PACKAGE's F2P suite with N independently written correct solutions.
+
+    The model only proposes a patch. The critic executes it in a copied Harbor task; a correct
+    patch that scores below 1.0 is recorded as evidence that the tests are too narrow.
+    """
+    from codekiln.billing.ledger import BillingLedger, Budget, BudgetExceeded, Pricing
+    from codekiln.synthesis.llm_router import ModelConfig, RouterError, http_post
+    from codekiln.validation import test_critic as critic
+    from codekiln.validation.verify import find_candidate
+
+    settings = Settings()
+    db_path = db or Path(settings.db_path)
+    if not db_path.exists():
+        typer.echo(f"No ledger at {db_path}. Run `codekiln run <repo>` first.", err=True)
+        raise typer.Exit(2)
+    try:
+        config = ModelConfig(
+            base_url=base_url or settings.llm_base_url, api_key=settings.llm_api_key,
+            model=model or settings.llm_model,
+        )
+    except RouterError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    pricing = Pricing(settings.llm_input_usd_per_1k, settings.llm_output_usd_per_1k)
+    bills = BillingLedger(ledger_csv or Path(settings.billing_ledger), pricing)
+    budget = Budget(
+        bills, run_id, settings.max_budget_usd if max_budget_usd is None else max_budget_usd,
+        config.model, pricing,
+    )
+    con = connect(str(db_path))
+    try:
+        budget.start_candidate(find_candidate(con, package) or 0)
+    finally:
+        con.close()
+    writer = critic.LLMAlternativeWriter(config, post=budget.meter_post(http_post))
+    try:
+        budget.guard()
+        result = critic.critique_tests(package, work, writer, alternatives=alternatives)
+    except BudgetExceeded as e:
+        typer.echo(f"stopped: BUDGET_EXCEEDED: {e}", err=True)
+        raise typer.Exit(1) from e
+    except critic.CriticError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    critic.write_report(out, result)
+    typer.echo(
+        f"{package.name}: {sum(a.passed for a in result.alternatives)}/{alternatives}"
+        f" alternative(s) passed; ${bills.spent(run_id):.4f} spent -> {out}"
+    )
+    for reason in result.reasons:
+        typer.echo(f"  reject: {reason}", err=True)
+    if not result.ok:
+        raise typer.Exit(1)
+
+
 @app.command(name="blind-read")
 def blind_read(package: Path, out: Path | None = None) -> None:
     """Dry-run the blind reader on PACKAGE's agent-visible instruction."""
