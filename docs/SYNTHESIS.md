@@ -5,9 +5,9 @@ The synthesizer's whole job is to turn one `Plan` into one `FeatureSpec`. Everyt
 the shape is fixed here before the LLM router lands. This page is the contract Cholan and Harsha
 wire against; `src/codekiln/synthesis/models.py` is the executable version.
 
-Status: **synthesis wired** — contract, RTM gate, package emitter, provider router and the pipeline
-stage (`DIVERSITY_OK -> SYNTHESIZED`) are in. Blind-reader linter, mutation probes and the eval
-runner are next.
+Status: **blind reader wired** — contract, RTM gate, package emitter, provider router, the
+pipeline stage (`DIVERSITY_OK -> BLIND_READER_OK`) and the dry-run instruction linter are in.
+Mutation probes and the eval runner are next.
 
 ## What consumes what
 
@@ -115,8 +115,7 @@ rejection reason appended; it never records its own success.
 
 ## Next (in order)
 
-1. Blind-reader linter: dry-run check on the agent-visible instruction, then `BLIND_READER_OK`.
-2. Mutation probes: four classes, each a Harbor trial with a swapped `solution/`, >=80% semantic kill.
+1. Mutation probes: four classes, each a Harbor trial with a swapped `solution/`, >=80% semantic kill.
 3. Cost ledger, budget breaker and idempotent resume.
 4. Blind eval runner + `eval_receipt.json` (2+ models).
 
