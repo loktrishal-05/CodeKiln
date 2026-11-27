@@ -294,9 +294,41 @@ def package(
 
 
 @app.command()
-def verify(package: str) -> None:
-    """Re-run the 3-state gate on a generated PACKAGE."""
-    _todo("verify")
+def verify(
+    package: Path,
+    work: Path = Path("runs/verify"),
+    db: Path | None = None,
+    candidate_id: int | None = None,
+    runs: int = 3,
+    concurrency: int = 4,
+) -> None:
+    """Run the 3-state gate on PACKAGE with Harbor (nop x N+1, oracle x N)."""
+    from codekiln.validation import harbor_runner
+    from codekiln.validation.verify import VerificationError, find_candidate, verify_package
+
+    ledger = db or Path(Settings().db_path)
+    if candidate_id is None and ledger.exists():
+        with connect(str(ledger)) as con:
+            candidate_id = find_candidate(con, package)
+
+    def run(task: Path, out: Path, agent: str) -> object:
+        return harbor_runner.run(task, out, agent, concurrency)
+
+    try:
+        result = verify_package(
+            package, work, runs=runs, db=ledger, candidate_id=candidate_id, run=run,
+        )
+    except (VerificationError, OSError, ValueError) as e:
+        typer.echo(f"verify failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    typer.echo(
+        f"{package.name}: {result.state.value} p2p={len(result.p2p)}"
+        f" quarantined={len(result.quarantined)} trials={result.trials}"
+    )
+    if result.reason:
+        typer.echo(f"  {result.reason}", err=True)
+    if not result.ok:
+        raise typer.Exit(1)
 
 
 @app.command(name="spec-check")

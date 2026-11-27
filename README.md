@@ -26,6 +26,10 @@ Prove a set of tasks asks for different behaviour (cross-task oracle matrix, ~10
 codekiln matrix packages/task-a packages/task-b ... --out variation_matrix.json
 ```
 
+Run the execution gate on a packaged task: `codekiln verify PACKAGE [--db LEDGER] [--runs 3]`.
+It runs Harbor `nop` (state A + 3x B) and `oracle` (3x C), writes `flakiness_quarantine.json`,
+records every trial in `validation_executions`, and advances or rejects the candidate.
+
 Seal a staged task: `codekiln scrub STAGING` writes `security_audit.json` and exits 1 on any
 anti-gaming violation; `codekiln package STAGING DEST --model NAME [--candidate-id ID --db LEDGER]`
 then writes `generation_receipt.json` + `manifest.sha256` and atomically promotes the directory.
