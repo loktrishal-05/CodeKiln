@@ -210,3 +210,24 @@ def test_auth_and_client_errors_are_not_retried_and_never_echo_a_key(monkeypatch
     assert waits == [] and "HTTP 401" in str(err.value)
     assert "gsk_abcdef123456" not in str(err.value) and "sk-testkey99" not in str(err.value)
     assert "<redacted>" in str(err.value)
+
+
+def test_repair_requests_do_not_grow_with_each_attempt() -> None:
+    """Re-sending every failed attempt grew each request until a provider with a per-request token
+    cap (Groq free tier: 8000) refused it with HTTP 413 on the third call of the first real run."""
+    sizes: list[int] = []
+    last_messages: list[list[dict[str, str]]] = []
+
+    def post(url: str, headers: dict[str, str], payload: dict[str, object]) -> Mapping[str, object]:
+        messages = payload["messages"]
+        assert isinstance(messages, list)
+        sizes.append(len(messages))
+        last_messages.append(messages)
+        return reply(f"garbage attempt {len(sizes)}")
+
+    with pytest.raises(SynthesisError, match="4 attempts"):
+        LLMWriter(CONFIG, post=post, retries=3).write(PLAN, repo="click", base_commit="abc")
+    assert sizes == [2, 4, 4, 4]  # system + prompt, then always + the latest reply and its rejection
+    final = [m["content"] for m in last_messages[-1]]
+    assert sum(c.startswith("Rejected:") for c in final) == 1  # only the latest rejection reason
+    assert "garbage attempt 3" in final and "garbage attempt 1" not in final  # earlier failures are dropped
