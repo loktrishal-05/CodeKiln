@@ -1,1 +1,1 @@
-"""llm_router, spec_generator, patch_generator, policy_filter."""
+"""FeatureSpec contract, RTM audit, package emitter, writer prompt (docs/SYNTHESIS.md)."""
