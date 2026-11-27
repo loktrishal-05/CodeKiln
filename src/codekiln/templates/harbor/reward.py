@@ -37,8 +37,8 @@ def main(pytest_out: str, f2p_path: str, p2p_path: str, out_dir: str) -> None:
     for n in f2p:
         if n not in status and n.split("::")[0] in broken:
             status[n] = "failed"
-    Path(out_dir, "results.json").write_text(json.dumps(status, indent=0), encoding="utf-8")
-    Path(out_dir, "reward.txt").write_text(str(reward(status, f2p, p2p)), encoding="utf-8")
+    Path(out_dir, "results.json").write_text(json.dumps(status, indent=0), encoding="utf-8", newline="\n")
+    Path(out_dir, "reward.txt").write_text(str(reward(status, f2p, p2p)), encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

@@ -128,4 +128,4 @@ def propose_mutants(
 def report_rejected(rejected: tuple[str, ...], path: Path) -> None:
     """Persist rejected proposals so a skipped mutant is visible, not silently dropped."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(list(rejected), indent=2), encoding="utf-8")
+    path.write_text(json.dumps(list(rejected), indent=2), encoding="utf-8", newline="\n")

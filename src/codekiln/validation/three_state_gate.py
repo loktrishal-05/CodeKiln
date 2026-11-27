@@ -62,4 +62,4 @@ def run_gate(runner: Runner, f2p: set[str], runs: int = 3) -> GateResult:
 
 
 def write_quarantine(path: Path, result: GateResult) -> None:
-    path.write_text(json.dumps({"quarantined": sorted(result.quarantined)}, indent=2), encoding="utf-8")
+    path.write_text(json.dumps({"quarantined": sorted(result.quarantined)}, indent=2), encoding="utf-8", newline="\n")

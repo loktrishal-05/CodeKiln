@@ -131,7 +131,7 @@ def factory(
     )
     work.mkdir(parents=True, exist_ok=True)  # the trace of who picked each action, for the report
     (work / "orchestrator_decisions.json").write_text(
-        json.dumps([d.to_dict() for d in result.decisions], indent=2) + "\n", encoding="utf-8"
+        json.dumps([d.to_dict() for d in result.decisions], indent=2) + "\n", encoding="utf-8", newline="\n"
     )
     typer.echo(
         f"run {run_id}: {len(result.packaged)} packaged, {len(result.rejected)} rejected,"
@@ -350,7 +350,7 @@ def ideate(
     finally:
         con.close()
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(reports, indent=2) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(reports, indent=2) + "\n", encoding="utf-8", newline="\n")
     typer.echo(f"run {run_id}: {len(reports)} slot report(s) -> {out}; ${bills.spent(run_id):.4f} spent")
     if stopped:
         typer.echo(f"stopped: {stopped}", err=True)
@@ -433,7 +433,7 @@ def blind_read(package: Path, out: Path | None = None) -> None:
 
     report = lint_package(package)
     dst = out or package / "blind_reader.json"
-    dst.write_text(report.to_json(), encoding="utf-8")
+    dst.write_text(report.to_json(), encoding="utf-8", newline="\n")
     typer.echo(f"{package.name}: {'BLIND_READER_OK' if report.ok else 'rejected'} -> {dst}")
     if not report.ok:
         for p in report.problems:
@@ -505,7 +505,7 @@ def firewall(
         typer.echo(f"firewall failed: {e}", err=True)
         raise typer.Exit(2) from e
     dst = out or package / "firewall.json"
-    dst.write_text(report.to_json(), encoding="utf-8")
+    dst.write_text(report.to_json(), encoding="utf-8", newline="\n")
     typer.echo(f"{package.name}: {'clear' if report.ok else 'CONTAMINATED'}"
                f" ({len(report.markers)} marker(s), {len(report.hits)} hit(s)) -> {dst}")
     for hit in report.hits[:10]:
@@ -819,7 +819,7 @@ def revise_spec(spec: Path, report: Path, out: Path) -> None:
     try:
         revised = apply_feedback(load_spec(spec), read_report(report))
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(revised.to_dict(), indent=2) + "\n", encoding="utf-8")
+        out.write_text(json.dumps(revised.to_dict(), indent=2) + "\n", encoding="utf-8", newline="\n")
     except (OSError, SynthesisError, ValueError) as e:
         typer.echo(f"spec revision failed: {e}", err=True)
         raise typer.Exit(2) from e
@@ -847,7 +847,7 @@ def report(
         typer.echo(str(e), err=True)
         raise typer.Exit(2) from e
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html, encoding="utf-8")
+    out.write_text(html, encoding="utf-8", newline="\n")
     typer.echo(f"Wrote {out}")
 
 
@@ -866,7 +866,7 @@ def matrix(
         return harbor_runner.run(dataset, work / "jobs", "oracle", concurrency)
 
     m = run_matrix([t.resolve() for t in tasks], work, runner)
-    out.write_text(json.dumps(m, indent=2), encoding="utf-8")
+    out.write_text(json.dumps(m, indent=2), encoding="utf-8", newline="\n")
     for name, row in zip(m["tasks"], m["reward"], strict=True):
         typer.echo(f"{name:>24} " + " ".join("  -- " if r is None else f"{r:5.2f}" for r in row))
     typer.echo(f"distinct={m['distinct']} overlaps={len(m['overlaps'])} broken={m['broken']} -> {out}")

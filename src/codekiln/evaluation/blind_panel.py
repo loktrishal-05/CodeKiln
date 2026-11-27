@@ -176,7 +176,7 @@ def run_panel(
 
 def write_report(path: Path, report: AmbiguityReport) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(report.to_json(), encoding="utf-8")
+    path.write_text(report.to_json(), encoding="utf-8", newline="\n")
     return path
 
 

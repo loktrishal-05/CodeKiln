@@ -45,7 +45,7 @@ def hash_tree(root: Path) -> dict[str, str]:
 def write_manifest(root: Path) -> Path:
     lines = [f"{digest}  {name}" for name, digest in sorted(hash_tree(root).items())]
     p = root / _MANIFEST
-    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return p
 
 
@@ -72,7 +72,7 @@ def write_receipt(root: Path, spec: PackageSpec, audit: SecurityAudit) -> dict[s
         "security": {"ok": audit.ok, "checks": audit.checks, "reasons": list(audit.reasons)},
         "hashes": hash_tree(root),
     }
-    (root / _RECEIPT).write_text(json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8")
+    (root / _RECEIPT).write_text(json.dumps(receipt, indent=2, sort_keys=True), encoding="utf-8", newline="\n")
     return receipt
 
 
