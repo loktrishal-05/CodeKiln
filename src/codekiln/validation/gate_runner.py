@@ -14,6 +14,7 @@ from codekiln.validation import harbor_runner
 from codekiln.validation.three_state_gate import Phase, Runner
 
 Run = Callable[[Path, Path, str], object]  # (task dir, -o dir, agent); results are read from disk
+TrialRecord = Callable[[Phase, int, Path, dict[str, str]], None]  # (phase, index, -o dir, results)
 
 
 def read_results(out: Path) -> dict[str, str]:
@@ -24,14 +25,19 @@ def read_results(out: Path) -> dict[str, str]:
     return {}
 
 
-def gate_runner(task: Path, work: Path, run: Run = harbor_runner.run) -> Runner:
+def gate_runner(
+    task: Path, work: Path, run: Run = harbor_runner.run, record: TrialRecord | None = None
+) -> Runner:
     f2p = set(json.loads((task / "tests" / "fail_to_pass.json").read_text()))
     n = count()
 
     def runner(phase: Phase) -> dict[str, str]:
-        out = work / f"{phase}-{next(n)}"
+        index = next(n)
+        out = work / f"{phase}-{index}"
         run(task, out, "oracle" if phase == "C" else "nop")
         results = read_results(out)
+        if record is not None:
+            record(phase, index, out, results)
         return {k: v for k, v in results.items() if k not in f2p} if phase == "A" else results
 
     return runner
