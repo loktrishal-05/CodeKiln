@@ -16,7 +16,13 @@ pytest
 codekiln --help
 ```
 
-Requires Python 3.12+ and Docker (for the sandbox, once implemented).
+Requires Python 3.12+, Docker with the **buildx** plugin (Harbor builds its no-network egress sidecar with it; on Arch: `pacman -S docker-buildx`), and the Harbor CLI on PATH: `uv tool install "harbor==0.25.*"`.
+
+Prove a set of tasks asks for different behaviour (cross-task oracle matrix, ~10 s per trial):
+
+```bash
+codekiln matrix packages/task-a packages/task-b ... --out variation_matrix.json
+```
 
 ## Layout
 
