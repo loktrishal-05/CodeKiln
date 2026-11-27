@@ -72,3 +72,6 @@ scratch/
 tmp/
 *.local
 .claude/settings.local.json
+
+# --- Committed sample outputs (submission deliverable, see CONTRIBUTING) ---
+!/samples/**

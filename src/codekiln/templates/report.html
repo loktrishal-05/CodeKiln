@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}}</title>
+<style>
+  :root {
+    --shelf: #edeff1; --ink: #1b2330; --muted: #5a6573; --rule: #c8ced5;
+    --pass: #2e7a59; --fail: #a8321f; --brick: #2b2f38;
+    --sans: "Seravek", "Gill Sans Nova", "Gill Sans", Ubuntu, Calibri, "Trebuchet MS", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--shelf); color: var(--ink); font: 1rem/1.5 var(--sans);
+         font-variant-numeric: tabular-nums; }
+  main { max-width: 70rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  header { border-bottom: 3px solid var(--brick); padding-bottom: 1.5rem; margin-bottom: 1rem; }
+  h1 { font-size: 2.6rem; line-height: 1.1; font-weight: 600; letter-spacing: -0.01em;
+       margin: 0 0 0.75rem; max-width: 30ch; }
+  .lede { font-size: 1.3rem; margin: 0; max-width: 60ch; }
+  .commit { color: var(--muted); margin: 0.75rem 0 0; }
+  code, pre { font-family: var(--mono); font-size: 0.85em; }
+  section { padding: 2rem 0 0.5rem; }
+  h2 { font-size: 1.35rem; font-weight: 600; margin: 0 0 1rem; }
+  .empty { color: var(--muted); }
+  .ok { color: var(--pass); font-weight: 600; }
+  .bad { color: var(--fail); font-weight: 600; }
+
+  .funnel { list-style: none; padding: 0; margin: 0; max-width: 46rem; }
+  .funnel li { display: grid; grid-template-columns: 11rem 1fr 3rem; gap: 0.75rem;
+               align-items: center; padding: 0.15rem 0; }
+  .funnel .stage { color: var(--muted); }
+  .funnel .bar { height: 0.9rem; width: var(--w); min-width: 2px; background: var(--brick); }
+  .funnel li:last-child .bar { background: var(--pass); }
+  .funnel .num { text-align: right; }
+
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; }
+  caption { caption-side: bottom; text-align: left; color: var(--muted); padding-top: 0.6rem;
+            font-size: 0.9rem; }
+  .matrix td, .matrix th { padding: 0; }
+  .matrix tbody td { width: 4.5rem; height: 3.25rem; text-align: center; font-size: 0.95rem;
+                     border: 2px solid var(--shelf); }
+  .matrix th { background: var(--shelf); font-weight: 500; }
+  .matrix tbody th { text-align: right; padding-right: 0.75rem; white-space: nowrap; }
+  .matrix thead th { height: 9rem; vertical-align: bottom; }
+  .matrix thead th span { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg);
+                          padding-bottom: 0.5rem; white-space: nowrap; }
+  .matrix thead td { background: var(--shelf); }
+
+  .tasks, .models { width: 100%; background: #fff; }
+  .tasks th, .tasks td, .models th, .models td { padding: 0.55rem 0.75rem; text-align: left;
+                                                  border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .tasks thead th, .models thead th { font-weight: 600; font-size: 0.9rem; color: var(--muted);
+                                       border-bottom: 2px solid var(--ink); }
+  td.n, th.n { text-align: right; }
+  .models { max-width: 32rem; }
+  .models tbody th { font-weight: 500; }
+  details summary { cursor: pointer; font-weight: 500; }
+  details pre { white-space: pre-wrap; max-width: 75ch; background: var(--shelf); padding: 0.75rem;
+                margin: 0.5rem 0; }
+  .path { margin: 0; color: var(--muted); }
+
+  .graveyard { list-style: none; padding: 0; margin: 0; max-width: 60rem; }
+  .graveyard li { padding: 0.5rem 0 0.5rem 1rem; border-left: 3px solid var(--fail); margin-bottom: 0.4rem;
+                  background: #fff; }
+  .graveyard .who { color: var(--muted); margin-right: 0.5rem; }
+
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+  @media (max-width: 40rem) {
+    h1 { font-size: 1.9rem; }
+    .funnel li { grid-template-columns: 8rem 1fr 2.5rem; }
+  }
+  @media print { body { background: #fff; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>CodeKiln run {{run_id}}: feature tasks fired from {{repo}}</h1>
+    <p class="lede">{{lede}}</p>
+    <p class="commit">Base commit <code>{{commit}}</code></p>
+  </header>
+  {{body}}
+  <footer>Every number above comes from the run ledger, the packaged task folders, or a Harbor job
+    result. Nothing an LLM reported about itself is shown here.</footer>
+</main>
+</body>
+</html>
