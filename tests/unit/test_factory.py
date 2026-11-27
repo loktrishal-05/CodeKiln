@@ -27,7 +27,7 @@ def verify_run(oracle: str = "passed"):
 
 
 def drive(tmp_path: Path, *, slots: int = 3, probe: float = 0.0, oracle: str = "passed",
-          max_steps: int = 200) -> tuple[FactorySummary, int, Path]:
+          max_steps: int = 200, corpus: list[Path] | None = None) -> tuple[FactorySummary, int, Path]:
     run_id = _ledger(tmp_path, slots)
     db = tmp_path / "k.sqlite"
     budget = Budget(BillingLedger(tmp_path / "billing.csv", Pricing()), run_id, 5.0, "fake-model")
@@ -37,7 +37,7 @@ def drive(tmp_path: Path, *, slots: int = 3, probe: float = 0.0, oracle: str = "
             con, run_id, writer=_writer(budget, []), staging=tmp_path / "staging",
             dest=tmp_path / "packages", work=tmp_path / "work", db=db, budget=budget,
             verify_run=verify_run(oracle), probe_run=lambda task, o: probe, max_steps=max_steps,
-            model="fake-model",
+            model="fake-model", corpus=corpus or (),
         )
     finally:
         con.close()

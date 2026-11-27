@@ -55,6 +55,7 @@ def factory(
     ledger_csv: Path | None = None,
     runs: int = typer.Option(3, min=1),
     agent: bool = typer.Option(False, help="Let a model order the allowed actions (metered)."),
+    corpus: Annotated[list[Path] | None, typer.Option(help="Later checkout(s) of the repo: reject features already in them.")] = None,
 ) -> None:
     """Plan (or resume) a run, then drive every candidate through every gate to a package.
 
@@ -109,7 +110,7 @@ def factory(
     result = run_factory(
         con, run_id, writer=LLMWriter(config, post=budget.meter_post(http_post)),
         staging=work / "staging", dest=dest, work=work, db=ledger, budget=budget,
-        runs=runs, model=config.model, chooser=chooser, workspace=workspace,
+        runs=runs, model=config.model, chooser=chooser, workspace=workspace, corpus=corpus or (),
     )
     work.mkdir(parents=True, exist_ok=True)  # the trace of who picked each action, for the report
     (work / "orchestrator_decisions.json").write_text(
@@ -420,6 +421,34 @@ def blind_read(package: Path, out: Path | None = None) -> None:
     if not report.ok:
         for p in report.problems:
             typer.echo(f"  {p}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command()
+def firewall(
+    package: Path,
+    corpus: Annotated[list[Path], typer.Option(help="Later checkout(s) of the repo to search; repeatable.")],
+    out: Path | None = None,
+) -> None:
+    """Flag PACKAGE if a later release of the repo already has the feature it introduces."""
+    from codekiln.validation.firewall import check
+
+    missing = [c for c in corpus if not c.is_dir()]
+    if missing:
+        typer.echo(f"corpus is not a directory: {', '.join(str(m) for m in missing)}", err=True)
+        raise typer.Exit(2)
+    try:
+        report = check(package, corpus)
+    except OSError as e:
+        typer.echo(f"firewall failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    dst = out or package / "firewall.json"
+    dst.write_text(report.to_json(), encoding="utf-8")
+    typer.echo(f"{package.name}: {'clear' if report.ok else 'CONTAMINATED'}"
+               f" ({len(report.markers)} marker(s), {len(report.hits)} hit(s)) -> {dst}")
+    for hit in report.hits[:10]:
+        typer.echo(f"  {hit.marker} already in {hit.file}:{hit.line}", err=True)
+    if not report.ok:
         raise typer.Exit(1)
 
 
