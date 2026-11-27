@@ -105,3 +105,17 @@ def test_model_config_refuses_missing_credentials() -> None:
         ModelConfig(base_url="https://x", api_key="", model="m")
     with pytest.raises(RouterError, match="MODEL"):
         ModelConfig(base_url="https://x", api_key="k", model="")
+
+
+def test_http_post_wraps_non_json_bodies(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+
+    from codekiln.synthesis import llm_router
+
+    monkeypatch.setattr(llm_router.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(b"<html>502</html>"))
+    with pytest.raises(RouterError, match="non-JSON"):
+        llm_router.http_post("https://llm.test/v1/chat/completions", {}, {})
+
+
+def test_model_config_repr_hides_the_key() -> None:
+    assert "sk-test" not in repr(CONFIG)
