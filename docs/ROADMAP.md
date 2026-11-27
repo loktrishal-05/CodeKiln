@@ -55,7 +55,7 @@ Rule: agents propose, code decides. Every pass/fail stays in the gates, probes, 
 - [ ] **[S]** Adversarial model-written mutants in the mutation probes (#46)
 - [ ] **[S]** Blind solver panel + ambiguity report (#47)
 - [x] **[C]** Red-team run in Harbor: an agent tries to cheat each package (#48)
-- [ ] **[C]** Separate verifier container (#49)
+- [x] **[C]** Separate verifier container (#49)
 - [ ] **[H]** Live agent trace view in the dashboard (#50)
 - [ ] **[H]** Agentic Benchmark Checklist report per package (#51)
 

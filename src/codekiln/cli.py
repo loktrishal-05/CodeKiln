@@ -956,3 +956,50 @@ def matrix(
     typer.echo(f"distinct={m['distinct']} overlaps={len(m['overlaps'])} broken={m['broken']} -> {out}")
     if not m["distinct"]:
         raise typer.Exit(1)
+
+
+@app.command(name="verify-isolated")
+def verify_isolated(
+    package: Path,
+    diff: Path | None = None,
+    trial_dir: Path | None = None,
+    oracle: bool = typer.Option(False, "--oracle", help="Grade package/solution/reference.diff."),
+    work: Path = Path("runs/verifier"),
+    out: Path | None = None,
+    image: str | None = None,
+    timeout_s: int | None = None,
+) -> None:
+    """Grade only an agent diff in a fresh, network-isolated verifier container."""
+    from codekiln.validation.verifier_sandbox import (
+        VerifierError,
+        extract_agent_diff,
+        verify_in_separate_container,
+        write_verifier_receipt,
+    )
+
+    try:
+        if oracle:
+            agent_diff = (package / "solution" / "reference.diff").read_text(encoding="utf-8")
+        elif diff is not None:
+            agent_diff = diff.read_text(encoding="utf-8")
+        elif trial_dir is not None:
+            agent_diff = extract_agent_diff(trial_dir)
+        else:
+            typer.echo("Pass --diff, --trial-dir, or --oracle", err=True)
+            raise typer.Exit(2)
+        res = verify_in_separate_container(
+            package, agent_diff, work, image=image, timeout_s=timeout_s
+        )
+    except (VerifierError, OSError, ValueError) as e:
+        typer.echo(f"isolated verify failed: {e}", err=True)
+        raise typer.Exit(2) from e
+
+    dst = write_verifier_receipt(out or package / "verifier_receipt.json", res)
+    typer.echo(
+        f"{package.name}: reward={res.reward} allowed={res.diff_allowed}"
+        f" isolated={res.container_isolated} -> {dst}"
+    )
+    if res.blocked_reason:
+        typer.echo(f"  blocked: {res.blocked_reason}", err=True)
+    if not res.ok:
+        raise typer.Exit(1)
