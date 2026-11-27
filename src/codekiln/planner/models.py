@@ -1,6 +1,6 @@
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
@@ -22,6 +22,9 @@ class Plan:
     symbols: frozenset[str]
     mode: Literal["reverse", "forward"]
     fanout: int = 0  # files that depend on the feature's module (blast radius hint)
+    # Repo Scout text for the writer prompt: not part of the slot's identity, so it never changes
+    # equality, the diversity guard or the ledger fingerprint.
+    context: str = field(default="", compare=False, repr=False)
 
     @property
     def items(self) -> frozenset[str]:

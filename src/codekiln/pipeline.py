@@ -29,14 +29,19 @@ class RunSummary:
     existing: int
 
 
+def workspace_path(source: str, commit: str, workdir: Path) -> Path:
+    """Where `run_pipeline` checks out SOURCE at COMMIT (so a resumed run can find it again)."""
+    name = Path(source.rstrip("/")).stem or "repo"
+    return workdir / f"{name}-{commit[:12]}"
+
+
 def run_pipeline(source: str, slots: int, con: sqlite3.Connection, workdir: Path) -> RunSummary:
     if Path(source).exists():
         source = str(Path(source).resolve())  # same repo, same key, however it was spelled
     workdir.mkdir(parents=True, exist_ok=True)
     tmp = workdir / f".tmp-{uuid.uuid4().hex[:8]}"
     commit = load_repo(source, tmp)
-    name = Path(source.rstrip("/")).stem or "repo"
-    ws = workdir / f"{name}-{commit[:12]}"
+    ws = workspace_path(source, commit, workdir)
     if ws.exists():  # resume: this exact (repo, commit) is already checked out
         shutil.rmtree(tmp)
     else:
