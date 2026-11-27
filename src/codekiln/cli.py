@@ -598,6 +598,52 @@ def eval_(
         raise typer.Exit(1)
 
 
+@app.command(name="blind-panel")
+def blind_panel(
+    package: Path,
+    model: Annotated[list[str] | None, typer.Option("--model")] = None,
+    work: Path = Path("runs/panel"),
+    out: Path = Path("ambiguity_report.json"),
+) -> None:
+    """Have 2-3 blind agents solve PACKAGE; report spec ambiguities from their disagreement."""
+    from codekiln.evaluation.blind_panel import PanelError, run_panel, write_report
+
+    models = model or ["claude-code", "codex"]
+    try:
+        result = run_panel(package, models, work)
+    except (PanelError, OSError, ValueError) as e:
+        typer.echo(f"blind panel failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    write_report(out, result)
+    typer.echo(
+        f"{package.name}: {len(result.answers)} solver(s),"
+        f" {len(result.ambiguities)} ambiguity(ies) -> {out}"
+    )
+    for answer in result.answers:
+        typer.echo(f"  {answer.model}: reward={answer.reward} signatures={answer.signatures}")
+    if result.feedback:
+        typer.echo("spec feedback:", err=True)
+        for line in result.feedback.splitlines():
+            typer.echo(f"  {line}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command(name="revise-spec")
+def revise_spec(spec: Path, report: Path, out: Path) -> None:
+    """Fold an ambiguity report's questions back into SPEC and re-check the static gates."""
+    from codekiln.evaluation.blind_panel import apply_feedback, read_report
+    from codekiln.synthesis.models import SynthesisError, load_spec
+
+    try:
+        revised = apply_feedback(load_spec(spec), read_report(report))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(revised.to_dict(), indent=2) + "\n", encoding="utf-8")
+    except (OSError, SynthesisError, ValueError) as e:
+        typer.echo(f"spec revision failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    typer.echo(f"{revised.task}: {len(revised.requirements)} REQ -> {out}")
+
+
 @app.command()
 def report(
     run_id: int,
