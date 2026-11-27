@@ -118,12 +118,16 @@ print(con.execute("SELECT COUNT(*) FROM task_candidates WHERE run_id = ?", (int(
 fi
 
 echo "==> [2/6] Synthesize candidates (run_id=$RUN_ID, budget=\$$MAX_BUDGET_USD)"
-"$CODEKILN_BIN" synth "$RUN_ID" \
+# synth exits 1 on a budget stop or rejections even when some candidates were staged;
+# keep going with what was staged (the gate loop below fails if nothing was).
+if ! "$CODEKILN_BIN" synth "$RUN_ID" \
   --db "$DB_PATH" \
   --packages "$STAGING_DIR" \
   --model "$MODEL" \
   --max-budget-usd "$MAX_BUDGET_USD" \
-  --ledger-csv "$LEDGER_CSV"
+  --ledger-csv "$LEDGER_CSV"; then
+  echo "warn: synth stopped early (budget cap or rejections); continuing with staged candidates" >&2
+fi
 
 mkdir -p "$PACKAGES_DIR"
 PROMOTED=()

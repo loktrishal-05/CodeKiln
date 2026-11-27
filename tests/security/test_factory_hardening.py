@@ -4,7 +4,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
+# On Windows `bash` is often WSL, which cannot see Windows paths; CI (Linux) runs these.
+needs_posix_bash = pytest.mark.skipif(os.name == "nt", reason="bash may resolve to WSL on Windows")
 
 
 def test_dockerignore_excludes_secrets_and_runtime_outputs():
@@ -29,6 +33,7 @@ def test_ci_workflow_hardening():
     assert "ruff check ." in ci and "mypy" in ci and "pytest" in ci
 
 
+@needs_posix_bash
 def test_demo_run_script_syntax_and_dry_run(tmp_path: Path):
     script = ROOT / "scripts" / "demo_run.sh"
     assert script.is_file()
@@ -66,4 +71,38 @@ def test_demo_run_script_syntax_and_dry_run(tmp_path: Path):
     assert dry.returncode == 0, dry.stdout + dry.stderr
     assert (out_dir / "codekiln.sqlite").is_file()
     assert "Dry run complete:" in dry.stdout
+
+
+FAKE_CODEKILN = """#!/usr/bin/env bash
+# Stand-in CLI: synth stages one task, then exits 1 as a budget stop does.
+cmd="$1"; shift
+case "$cmd" in
+  run) "$PYTHON_BIN" -c "import os, sqlite3; c = sqlite3.connect(os.environ['CODEKILN_DB_PATH']); c.execute('CREATE TABLE IF NOT EXISTS factory_runs (id INTEGER PRIMARY KEY)'); c.execute('INSERT INTO factory_runs DEFAULT VALUES'); c.commit()" ;;
+  synth) while [ $# -gt 0 ]; do [ "$1" = "--packages" ] && mkdir -p "$2/click-task-a"; shift; done; exit 1 ;;
+  package) mkdir -p "$2" ;;
+  report) while [ $# -gt 0 ]; do [ "$1" = "--out" ] && touch "$2"; shift; done ;;
+esac
+exit 0
+"""
+
+
+@needs_posix_bash
+def test_demo_run_keeps_going_when_synth_stops_early(tmp_path: Path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in (("codekiln", FAKE_CODEKILN), ("harbor", "#!/usr/bin/env bash\nexit 0\n"),
+                       ("docker", "#!/usr/bin/env bash\nexit 0\n")):
+        (bin_dir / name).write_text(body, encoding="utf-8", newline="\n")
+        (bin_dir / name).chmod(0o755)
+    env = os.environ.copy()
+    env.update({"PYTHON_BIN": sys.executable, "CODEKILN_BIN": str(bin_dir / "codekiln"),
+                "CODEKILN_LLM_API_KEY": "sk-test",
+                "PATH": str(bin_dir) + os.pathsep + env.get("PATH", "")})
+    res = subprocess.run(
+        ["bash", str(ROOT / "scripts" / "demo_run.sh"), "--out", str(tmp_path / "out")],
+        cwd=ROOT, env=env, capture_output=True, text=True, check=False,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    assert "synth stopped early" in res.stderr
+    assert "Promoted 1 package(s)" in res.stdout
 
