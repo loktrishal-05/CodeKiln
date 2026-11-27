@@ -139,3 +139,74 @@ def test_http_post_sends_an_explicit_user_agent_and_keeps_the_callers_headers(mo
     seen.clear()
     llm_router.http_post("https://p.invalid/x", {"User-Agent": "mine/1"}, {})
     assert seen["user-agent"] == "mine/1"  # an explicit caller choice wins
+
+
+def _http_error(code: int, message: str = "", retry_after: str | None = None):  # type: ignore[no-untyped-def]
+    import io
+    import urllib.error
+    from email.message import Message
+
+    headers = Message()
+    if retry_after is not None:
+        headers["Retry-After"] = retry_after
+    body = json.dumps({"error": {"message": message}}).encode()
+    return urllib.error.HTTPError("https://p.invalid/x", code, "err", headers, io.BytesIO(body))
+
+
+def _script(monkeypatch: pytest.MonkeyPatch, outcomes: list[object]):  # type: ignore[no-untyped-def]
+    """urlopen yields each outcome in turn (an exception is raised, bytes are a 200 body)."""
+    import io
+
+    from codekiln.synthesis import llm_router
+
+    waits: list[float] = []
+    queue = list(outcomes)
+
+    def fake_urlopen(req, timeout):  # type: ignore[no-untyped-def]
+        out = queue.pop(0)
+        if isinstance(out, Exception):
+            raise out
+        return io.BytesIO(out)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(llm_router.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(llm_router.time, "sleep", waits.append)
+    return llm_router, waits
+
+
+OK = b'{"choices": [{"message": {"content": "hi"}}]}'
+
+
+def test_a_rate_limit_waits_for_retry_after_then_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    lr, waits = _script(monkeypatch, [_http_error(429, "slow down", "3"), _http_error(429, "slow down", "3"), OK])
+    assert lr.http_post("https://p.invalid/x", {}, {})["choices"]
+    assert waits == [3.0, 3.0]
+
+
+def test_the_wait_is_read_from_the_message_when_there_is_no_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    lr, waits = _script(monkeypatch, [
+        _http_error(429, "Rate limit reached on tokens per minute. Please try again in 6.5s."),
+        _http_error(429, "Please try again in 1m3.2s."), OK])
+    lr.http_post("https://p.invalid/x", {}, {})
+    assert waits == [7.0, 63.7]
+
+
+def test_a_huge_retry_after_is_capped(monkeypatch: pytest.MonkeyPatch) -> None:
+    lr, waits = _script(monkeypatch, [_http_error(429, "", "5000"), OK])
+    lr.http_post("https://p.invalid/x", {}, {})
+    assert waits == [lr.MAX_WAIT_S]
+
+
+def test_it_gives_up_after_the_attempt_limit_and_reports_the_providers_own_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    lr, waits = _script(monkeypatch, [_http_error(429, "Limit 8000 TPM", "1") for _ in range(6)])
+    with pytest.raises(RouterError, match="HTTP 429: Limit 8000 TPM"):
+        lr.http_post("https://p.invalid/x", {}, {})
+    assert len(waits) == lr.MAX_ATTEMPTS - 1
+
+
+def test_auth_and_client_errors_are_not_retried_and_never_echo_a_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    lr, waits = _script(monkeypatch, [_http_error(401, "bad key gsk_abcdef123456 for sk-testkey99")])
+    with pytest.raises(RouterError) as err:
+        lr.http_post("https://p.invalid/x", {}, {})
+    assert waits == [] and "HTTP 401" in str(err.value)
+    assert "gsk_abcdef123456" not in str(err.value) and "sk-testkey99" not in str(err.value)
+    assert "<redacted>" in str(err.value)

@@ -5,6 +5,8 @@ router only proposes a spec; `validate`, the RTM audit and the execution gate de
 is admissible, so a confident-sounding model cannot mark its own work correct.
 """
 import json
+import re
+import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
@@ -133,19 +135,59 @@ def http_post(url: str, headers: dict[str, str], payload: dict[str, object]) -> 
     Sends an explicit User-Agent: urllib's default (`Python-urllib/x.y`) is rejected with a 403
     (Cloudflare error 1010) by providers such as Groq, found on the first real run.
     """
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode("utf-8"),
-        headers={"User-Agent": USER_AGENT, **headers}, method="POST",
-    )
+    data = json.dumps(payload).encode("utf-8")
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        req = urllib.request.Request(
+            url, data=data, headers={"User-Agent": USER_AGENT, **headers}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=120) as resp:
+                body: object = json.loads(resp.read())
+        except urllib.error.HTTPError as e:
+            message = _provider_message(e)
+            if e.code in _RETRYABLE and attempt < MAX_ATTEMPTS:
+                time.sleep(min(_retry_after(e, message), MAX_WAIT_S))  # wait out the rate-limit window
+                continue
+            raise RouterError(f"provider returned HTTP {e.code}: {message}" if message
+                              else f"provider returned HTTP {e.code}") from e
+        except (urllib.error.URLError, TimeoutError) as e:
+            raise RouterError(f"provider request failed: {e}") from e
+        except ValueError as e:  # 200 with a non-JSON or non-UTF-8 body (proxy, HTML error page)
+            raise RouterError("provider returned a non-JSON body") from e
+        if not isinstance(body, dict):
+            raise RouterError("provider returned a non-object body")
+        return body
+    raise RouterError("provider kept rate-limiting the request")  # unreachable: the loop returns or raises
+
+
+_RETRYABLE = {429, 502, 503, 504}  # rate limit / transient: the same request may succeed shortly
+MAX_ATTEMPTS = 4
+MAX_WAIT_S = 70.0  # one window of a per-minute limit; never sleep longer than this per attempt
+_WAIT = re.compile(r"try again in (?:(\d+)m)?(?:(\d+(?:\.\d+)?)s)?")
+_SECRET = re.compile(r"\b(?:gsk|sk)[-_][A-Za-z0-9_-]{6,}")
+
+
+def _provider_message(e: urllib.error.HTTPError) -> str:
+    """The provider's own error text (it says which limit was hit), with anything key-like removed."""
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
-            body: object = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        raise RouterError(f"provider returned HTTP {e.code}") from e
-    except (urllib.error.URLError, TimeoutError) as e:
-        raise RouterError(f"provider request failed: {e}") from e
-    except ValueError as e:  # 200 with a non-JSON or non-UTF-8 body (proxy, HTML error page)
-        raise RouterError("provider returned a non-JSON body") from e
-    if not isinstance(body, dict):
-        raise RouterError("provider returned a non-object body")
-    return body
+        raw = e.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+    try:
+        parsed = json.loads(raw)
+        text = str(parsed.get("error", {}).get("message", "")) if isinstance(parsed, dict) else raw
+    except ValueError:
+        text = raw
+    return _SECRET.sub("<redacted>", " ".join(text.split()))[:240]
+
+
+def _retry_after(e: urllib.error.HTTPError, message: str) -> float:
+    """Seconds to wait: the Retry-After header, else the message's 'try again in 1m3.5s', else 20."""
+    try:
+        return float(e.headers.get("Retry-After", ""))
+    except (TypeError, ValueError):
+        pass
+    m = _WAIT.search(message)
+    if m and (m.group(1) or m.group(2)):
+        return int(m.group(1) or 0) * 60 + float(m.group(2) or 0) + 0.5
+    return 20.0
