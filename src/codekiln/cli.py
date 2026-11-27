@@ -165,6 +165,91 @@ def resume(
     _report_synth(run_id, summary, reasons, spent)
 
 
+@app.command()
+def ideate(
+    run_id: int,
+    candidates: int = typer.Option(3, min=1),
+    out: Path = Path("ideation.json"),
+    db: Path | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    max_budget_usd: float | None = None,
+    ledger_csv: Path | None = None,
+) -> None:
+    """Propose N specs per DIVERSITY_OK slot; a deterministic critic keeps the novel ones.
+
+    Every proposal is metered by the cost ledger; only the model's HTTP call is provider-specific.
+    The JSON report carries the admitted specs and the exact reason each other one was dropped.
+    """
+    from codekiln.billing.ledger import BillingLedger, Budget, BudgetExceeded, Pricing
+    from codekiln.planner.models import load_plan
+    from codekiln.synthesis.ideator import ideate as run_ideation
+    from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError, http_post
+    from codekiln.synthesis.models import SynthesisError
+
+    settings = Settings()
+    ledger_path = db or Path(settings.db_path)
+    if not ledger_path.exists():
+        typer.echo(f"No ledger at {ledger_path}. Run `codekiln run <repo>` first.", err=True)
+        raise typer.Exit(2)
+    try:
+        config = ModelConfig(
+            base_url=base_url or settings.llm_base_url, api_key=settings.llm_api_key,
+            model=model or settings.llm_model,
+        )
+    except RouterError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    pricing = Pricing(settings.llm_input_usd_per_1k, settings.llm_output_usd_per_1k)
+    bills = BillingLedger(ledger_csv or Path(settings.billing_ledger), pricing)
+    budget = Budget(
+        bills, run_id, settings.max_budget_usd if max_budget_usd is None else max_budget_usd,
+        config.model, pricing,
+    )
+    con = connect(str(ledger_path))
+    try:
+        run = con.execute(
+            "SELECT r.url, r.base_commit FROM factory_runs f JOIN repositories r"
+            " ON r.id = f.repo_id WHERE f.id = ?", (run_id,),
+        ).fetchone()
+        if not run:
+            typer.echo(f"run {run_id} not found in the ledger", err=True)
+            raise typer.Exit(2)
+        repo, base_commit = run
+        slots = con.execute(
+            "SELECT c.id, p.plan_json FROM task_candidates c LEFT JOIN task_plans p"
+            " ON p.candidate_id = c.id WHERE c.run_id = ? AND c.status = ? ORDER BY c.id",
+            (run_id, State.DIVERSITY_OK.value),
+        ).fetchall()
+        writer = LLMWriter(config, post=budget.meter_post(http_post))
+        reports: list[dict[str, object]] = []
+        stopped = ""
+        for cid, plan_json in slots:
+            if not plan_json:
+                continue
+            budget.start_candidate(cid)
+            try:
+                budget.guard()
+                report = json.loads(run_ideation(load_plan(plan_json), writer, n=candidates,
+                                                 repo=repo, base_commit=base_commit).to_json())
+            except BudgetExceeded as e:
+                stopped = f"BUDGET_EXCEEDED: {e}"
+                reports.append({"candidate_id": cid, "ok": False, "error": stopped})
+                break
+            except (SynthesisError, RouterError, ValueError) as e:  # one slot must not lose the rest
+                report = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+            report["candidate_id"] = cid
+            reports.append(report)
+    finally:
+        con.close()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(reports, indent=2) + "\n", encoding="utf-8")
+    typer.echo(f"run {run_id}: {len(reports)} slot report(s) -> {out}; ${bills.spent(run_id):.4f} spent")
+    if stopped:
+        typer.echo(f"stopped: {stopped}", err=True)
+        raise typer.Exit(1)
+
+
 @app.command(name="test-critic")
 def test_critic(
     package: Path,
@@ -181,7 +266,8 @@ def test_critic(
     """Stress PACKAGE's F2P suite with N independently written correct solutions.
 
     The model only proposes a patch. The critic executes it in a copied Harbor task; a correct
-    patch that scores below 1.0 is recorded as evidence that the tests are too narrow.
+    patch that scores below 1.0 is recorded as a signal that the tests may be too narrow (or the
+    alternative wrong): review it, nothing is gated on it.
     """
     from codekiln.billing.ledger import BillingLedger, Budget, BudgetExceeded, Pricing
     from codekiln.synthesis.llm_router import ModelConfig, RouterError, http_post

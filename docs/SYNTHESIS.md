@@ -35,7 +35,17 @@ asserts all six packages plus the CSV events.
 `codekiln test-critic PACKAGE RUN_ID --alternatives N` asks the model for N *different but correct*
 patches and executes each one in a copied Harbor task. A malformed or copied patch is rejected
 before the trial; a correct alternative scoring below 1.0 is recorded in `test_critic.json` as
-`too_narrow` with its exact reward. The model never grades the tests — the verifier does.
+`too_narrow` with its exact reward. The verifier measures the reward, but the alternative's
+correctness is only the model's claim, so a low reward means "tests too narrow *or* alternative
+wrong": a person reviews it, and nothing is gated on it.
+
+## Ideator + critic (#44)
+
+`codekiln ideate RUN_ID --candidates N` asks the writer for N specs per slot and writes
+`ideation.json`. Proposal 0 is the single-writer baseline; the deterministic critic drops any
+spec that fails `validate` / RTM / blind-reader, ignores the slot's planned symbols, duplicates a
+kept task name, or is more than 50% token-overlapping with the baseline or a kept proposal. Only
+the model proposes — admission stays in code, and execution correctness still belongs to Harbor.
 
 ## What consumes what
 

@@ -1,9 +1,12 @@
 """Test Author + Test Critic (issue #45): a second correct implementation stresses the suite.
 
 A model may author tests and may propose an alternative solution, but it never grades either. The
-critic copies the package, swaps in the alternative patch and runs Harbor. A correct alternative
-that scores below 1.0 is executable evidence that the F2P tests are too narrow; a malformed or
-copied patch is rejected before the trial so it cannot masquerade as a failing test.
+critic copies the package, swaps in the alternative patch and runs Harbor. An alternative that
+scores 1.0 is real evidence the tests accept more than one implementation. One that scores below
+1.0 is only a *signal*: the tests may be too narrow, or the alternative may simply be wrong (its
+correctness is the model's claim, not a measurement), so a person reviews it and nothing is gated
+on it automatically. A malformed or copied patch is rejected before the trial so it cannot
+masquerade as a failing test.
 """
 import json
 import re
@@ -182,9 +185,11 @@ def critique_tests(
         if reward is None:
             reason = "trial crashed; no executable verdict"
         elif reward < 1.0:
+            # The alternative's correctness is the model's claim, not a measurement: a buggy patch
+            # scores the same. So this is a signal for a person to check, not a verdict.
             reason = (
-                f"tests too narrow: a correct alternative scored {reward:.2f} < 1.0"
-                f" on {len(f2p)} F2P nodes"
+                f"tests too narrow (or the alternative is wrong; review the failing F2P nodes):"
+                f" the alternative scored {reward:.2f} < 1.0 on {len(f2p)} F2P nodes"
             )
         results.append(Alternative(name, reward, reward == 1.0, reason))
 
