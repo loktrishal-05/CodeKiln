@@ -30,6 +30,14 @@ linter pass; execution correctness is still decided later by Harbor in the 3-sta
 `tests/unit/test_six_slot_synthesis.py` exercises this exact path with the HTTP call faked and
 asserts all six packages plus the CSV events.
 
+## Ideator + critic (#44)
+
+`codekiln ideate RUN_ID --candidates N` asks the writer for N specs per slot and writes
+`ideation.json`. Proposal 0 is the single-writer baseline; the deterministic critic drops any
+spec that fails `validate` / RTM / blind-reader, ignores the slot's planned symbols, duplicates a
+kept task name, or is more than 50% token-overlapping with the baseline or a kept proposal. Only
+the model proposes — admission stays in code, and execution correctness still belongs to Harbor.
+
 ## What consumes what
 
 | Consumer | Reads | From |
