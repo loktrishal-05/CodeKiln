@@ -23,7 +23,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - [x] **[S]** Synthesizer: instruction.md, reference diff, F2P tests, RTM coverage gate (emits the Harbor layout in SPEC -> Task package)
 - [x] **[L]** 3-state x3 gate + flakiness quarantine
 - [x] **[S]** 4-class mutation probes (>=80% kill), each probe = a Harbor trial with a swapped `solution/`
-- [ ] **[C]** Scrubber + Harbor packager (`tests/test.sh` with the official reward formula, `fail_to_pass.json`/`pass_to_pass.json`, `network_mode="no-network"`, separate verifier) + generation receipt + manifest + `security_audit.json`
+- [x] **[C]** Scrubber + Harbor packager (`tests/test.sh` with the official reward formula, `fail_to_pass.json`/`pass_to_pass.json`, `network_mode="no-network"`, separate verifier) + generation receipt + manifest + `security_audit.json`
 - [x] **[S]** Cost ledger + budget breaker + idempotent resume
 - [ ] **[H]** Static HTML dashboard (`codekiln report` -> `factory_report.html`)
 - [ ] **[C]** One-command reproducible run (`scripts/demo_run.sh`, factory Dockerfile so judges can re-run us) + CI hardening; verify end-to-end on click (all, Dec 4-5)

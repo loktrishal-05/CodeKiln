@@ -215,6 +215,85 @@ def probe(
 
 
 @app.command()
+def scrub(task: Path, out: Path | None = None) -> None:
+    """Audit a staged Harbor task against the anti-gaming policy (writes security_audit.json)."""
+    from codekiln.packaging.scrubber import audit_task, write_audit
+
+    try:
+        audit = audit_task(task)
+    except (OSError, ValueError) as e:
+        typer.echo(f"scrub failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    dst = write_audit(out or task / "security_audit.json", audit)
+    typer.echo(f"{task.name}: {'SCRUBBED' if audit.ok else 'blocked'} -> {dst}")
+    if not audit.ok:
+        for reason in audit.reasons:
+            typer.echo(f"  {reason}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command()
+def package(
+    staging: Path,
+    dest: Path,
+    model: str = "codekiln",
+    cost_usd: float = 0.0,
+    gates_ok: bool = typer.Option(
+        False, "--gates-ok/--no-gates-ok",
+        help="Caller asserts the execution gates passed; without it nothing is promoted.",
+    ),
+    spec_sha256: str = "",
+    candidate_id: int | None = None,
+    run_id: int | None = None,
+    db: Path | None = None,
+) -> None:
+    """Seal a staged task (receipt + manifest) and promote it atomically to DEST."""
+    import hashlib
+
+    from codekiln.packaging.packager import PackageRejected, PackageSpec, promote
+    from codekiln.packaging.scrubber import audit_task
+    from codekiln.states import State
+
+    ledger = db or Path(Settings().db_path)
+    if candidate_id is None and run_id is not None and ledger.exists():
+        with connect(str(ledger)) as con:
+            row = con.execute(
+                "SELECT c.id FROM task_candidates c JOIN task_plans p ON p.candidate_id = c.id"
+                " WHERE c.run_id = ? AND p.package_path LIKE ? ORDER BY c.id LIMIT 1",
+                (run_id, f"%{staging.name}%"),
+            ).fetchone()
+            if row:
+                candidate_id = int(row[0])
+    try:
+        audit = audit_task(staging)
+        placed = promote(
+            staging, dest,
+            PackageSpec(staging.name, model, cost_usd, gates_ok, spec_sha256=spec_sha256),
+            audit,
+        )
+    except (PackageRejected, OSError, ValueError) as e:
+        typer.echo(f"package blocked: {e}", err=True)
+        raise typer.Exit(1) from e
+    manifest = hashlib.sha256((placed / "manifest.sha256").read_bytes()).hexdigest()
+    if ledger.exists() and candidate_id is not None:
+        with connect(str(ledger)) as con:
+            con.execute(
+                "UPDATE task_candidates SET status = ? WHERE id = ?",
+                (State.SCRUBBED.value, candidate_id),
+            )
+            con.execute(
+                "UPDATE task_candidates SET status = ?, package_sha256 = ? WHERE id = ?",
+                (State.PACKAGED.value, manifest, candidate_id),
+            )
+            # A promoted package is the resume key for eval/resume on a fresh checkout.
+            con.execute(
+                "UPDATE task_plans SET package_path = ? WHERE candidate_id = ?",
+                (str(placed), candidate_id),
+            )
+    typer.echo(f"{placed} -> PACKAGED (manifest {manifest[:12]})")
+
+
+@app.command()
 def verify(package: str) -> None:
     """Re-run the 3-state gate on a generated PACKAGE."""
     _todo("verify")
