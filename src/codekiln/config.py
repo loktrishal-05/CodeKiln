@@ -15,3 +15,7 @@ class Settings(BaseSettings):
     sandbox_timeout_s: int = 120
     flake_runs: int = 3
     mutant_kill_threshold: float = 0.8
+    billing_ledger: str = "billing_ledger.csv"
+    # USD per 1k tokens; defaults are gpt-4o-mini rates, override per provider.
+    llm_input_usd_per_1k: float = 0.00015
+    llm_output_usd_per_1k: float = 0.0006

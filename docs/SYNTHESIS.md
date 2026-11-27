@@ -5,9 +5,9 @@ The synthesizer's whole job is to turn one `Plan` into one `FeatureSpec`. Everyt
 the shape is fixed here before the LLM router lands. This page is the contract Cholan and Harsha
 wire against; `src/codekiln/synthesis/models.py` is the executable version.
 
-Status: **probes wired** — contract, RTM gate, package emitter, provider router, the pipeline
-stage (`DIVERSITY_OK -> BLIND_READER_OK`), the dry-run instruction linter and four-class mutation
-probes are in. Cost ledger/resume and the eval runner are next.
+Status: **metered** — contract, RTM gate, package emitter, provider router, the pipeline stage
+(`DIVERSITY_OK -> BLIND_READER_OK`), the dry-run instruction linter, four-class mutation probes and
+the cost ledger with a hard budget breaker / idempotent resume are in. The blind eval runner is next.
 
 ## What consumes what
 
@@ -113,10 +113,17 @@ Any OpenAI-compatible `/chat/completions` endpoint works. Credentials are host-o
 container. The writer validates and RTM-checks every reply and retries at most twice with the
 rejection reason appended; it never records its own success.
 
+## Cost control
+
+`synth` / `resume --run-id` meter every provider call into `billing_ledger.csv`:
+`BUDGET_ALLOCATION` (once per run, idempotent), `PREAUTH_HOLD` (estimated before the call),
+`PREAUTH_RELEASE` + `LLM_DEBIT` (real usage from the response). `--max-budget-usd` is a hard stop:
+the writer never gets another call once the cap is reached; unfinished candidates stay
+`DIVERSITY_OK` and `resume` skips finished/dead-lettered slots. Keys stay host-only.
+
 ## Next (in order)
 
-1. Cost ledger, budget breaker and idempotent resume.
-2. Blind eval runner + `eval_receipt.json` (2+ models).
+1. Blind eval runner + `eval_receipt.json` (2+ models).
 
 ## Team asks
 
