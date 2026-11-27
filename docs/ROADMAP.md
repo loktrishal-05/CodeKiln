@@ -42,9 +42,28 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - ~~**[H]** Cross-repo portability matrix~~ replaced by the cross-task oracle matrix (Wave 1)
 - [x] **[S]** Blind eval runner + `eval_receipt.json`; **[H]** leaderboard view (2+ frontier models)
 
+## Wave 2b: agentic upgrade (Dec 7 - Dec 19)
+
+Rule: agents propose, code decides. Every pass/fail stays in the gates, probes, scrubber and Harbor reward; each agent sits behind a flag and must beat the single-writer baseline on the same slots to stay. Gate: do not start until 5 real packages pass Harbor nop 0.0 / oracle 1.0 (issues #34-#39). Research and rationale: the "CodeKiln Upgrade Research" doc.
+
+- [ ] **[L]** Orchestrator agent over the state machine (allowed actions only, step limit, budget) (#40)
+- [ ] **[L]** Repo Scout: context packs per click subsystem (#41)
+- [ ] **[L]** Contamination firewall: later click releases/issues/PRs + memorisation probe (#42)
+- [ ] **[L]** Difficulty calibration from eval results, feeding the L1/L2/L3 dial (#43)
+- [ ] **[S]** Feature Ideator + Critic (#44)
+- [ ] **[S]** Test Author + Test Critic: alternative correct solution, flag too-narrow tests (#45)
+- [ ] **[S]** Adversarial model-written mutants in the mutation probes (#46)
+- [ ] **[S]** Blind solver panel + ambiguity report (#47)
+- [ ] **[C]** Red-team run in Harbor: an agent tries to cheat each package (#48)
+- [ ] **[C]** Separate verifier container (#49)
+- [ ] **[H]** Live agent trace view in the dashboard (#50)
+- [ ] **[H]** Agentic Benchmark Checklist report per package (#51)
+
 ## Wave 3: production (post-hackathon)
 
 - **[H]** React HITL portal + **[L]** FastAPI backend (OIDC/RBAC)
 - **[C]** Temporal + Modal/Firecracker sandbox fleet, PostgreSQL/S3/registry
 - **[S]** Adaptive validation agent, memorization monitor
-- **[L]** Live PR-to-benchmark loop
+- **[L]** Live PR-to-benchmark loop (#54)
+- **[L]** Bring-your-own-repo mode: private, contamination-free evals for a team's own codebase (#52)
+- **[C]** zod (vitest) / jsoncpp (ctest) adapters + cloud sandbox fleet (#53)
