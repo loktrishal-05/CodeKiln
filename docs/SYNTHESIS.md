@@ -5,9 +5,10 @@ The synthesizer's whole job is to turn one `Plan` into one `FeatureSpec`. Everyt
 the shape is fixed here before the LLM router lands. This page is the contract Cholan and Harsha
 wire against; `src/codekiln/synthesis/models.py` is the executable version.
 
-Status: **metered** — contract, RTM gate, package emitter, provider router, the pipeline stage
-(`DIVERSITY_OK -> BLIND_READER_OK`), the dry-run instruction linter, four-class mutation probes and
-the cost ledger with a hard budget breaker / idempotent resume are in. The blind eval runner is next.
+Status: **complete for the [S] items** — contract, RTM gate, package emitter, provider router, the
+pipeline stage (`DIVERSITY_OK -> BLIND_READER_OK`), the dry-run instruction linter, four-class
+mutation probes, the cost ledger with a hard budget breaker / idempotent resume, and the blind
+eval runner with `eval_receipt.json` are in.
 
 ## What consumes what
 
@@ -121,9 +122,13 @@ rejection reason appended; it never records its own success.
 the writer never gets another call once the cap is reached; unfinished candidates stay
 `DIVERSITY_OK` and `resume` skips finished/dead-lettered slots. Keys stay host-only.
 
-## Next (in order)
+## Blind eval
 
-1. Blind eval runner + `eval_receipt.json` (2+ models).
+`codekiln eval packages/* --model claude-code --model codex` runs two or more real Harbor agents
+on each task (agent sees `instruction.md` only), then writes `eval_receipt.json`: per-task rewards,
+resolved flags, bloat ratio and blast radius from the agent diff, ATIF trace path, USD/solve, a
+model x task solve matrix and tasks every model solved or none solved. Rows are mirrored into
+`eval_runs`, which is what the dashboard's leaderboard reads.
 
 ## Team asks
 
