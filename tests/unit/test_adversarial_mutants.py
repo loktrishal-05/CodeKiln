@@ -12,7 +12,7 @@ from codekiln.db import connect, idempotency_key
 from codekiln.planner.models import Category, Plan, dump_plan
 from codekiln.states import State
 from codekiln.synthesis.emit import write_package
-from codekiln.synthesis.llm_router import ModelConfig
+from codekiln.synthesis.llm_router import ModelConfig, RouterError
 from codekiln.validation import adversarial as adv
 from codekiln.validation.mutation_probe import Mutant, probe_package
 
@@ -166,3 +166,24 @@ def test_cli_generates_meters_and_reports_an_adversarial_survivor(
         )
     finally:
         con.close()
+
+
+def test_cli_reports_a_provider_failure_cleanly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    package = write_package(tmp_path / "task", make_spec(), repo_url=REPO, base_commit=SHA)
+    db = tmp_path / "k.sqlite"
+    connect(str(db)).close()  # the ledger only has to exist for this path
+
+    def down(url: str, headers: dict[str, str], payload: dict[str, object]) -> dict[str, object]:
+        raise RouterError("provider returned HTTP 503")
+
+    monkeypatch.setattr("codekiln.synthesis.llm_router.http_post", down)
+    monkeypatch.setenv("CODEKILN_DB_PATH", str(db))
+    monkeypatch.setenv("CODEKILN_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("CODEKILN_BILLING_LEDGER", str(tmp_path / "billing.csv"))
+    res = CliRunner().invoke(app, [
+        "probe", str(package), "--adversarial", "1", "--run-id", "1",
+        "--work", str(tmp_path / "work"), "--out", str(tmp_path / "dossier.json"),
+    ])
+    assert res.exit_code == 2, res.output
+    assert "adversarial proposal failed: provider returned HTTP 503" in res.output
+    assert isinstance(res.exception, SystemExit)  # a clean exit, not a traceback
