@@ -95,7 +95,11 @@ class AmbiguityReport:
 
 
 def _features(diff: str) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
-    signatures = tuple(sorted(f"{m.group(1)}({m.group(2).strip()})" for m in _SIG.finditer(diff)))
+    # Private helpers are an implementation choice, not part of the contract the spec must pin down.
+    signatures = tuple(sorted(
+        f"{m.group(1)}({m.group(2).strip()})" for m in _SIG.finditer(diff)
+        if not m.group(1).startswith("_")
+    ))
     defaults = tuple(
         sorted(
             f"{m.group(1)}={m.group(2).strip()}"
@@ -148,9 +152,18 @@ def run_panel(
         )
 
     ambiguities: list[Ambiguity] = []
+    # A solver that crashed or produced no diff has no features; comparing it would report every
+    # topic as "ambiguous" when the truth is "no data".
+    usable = [a for a in answers if a.reward is not None and (a.signatures or a.defaults or a.files or a.literals)]
+    if len(usable) < 2:
+        seen = tuple(f"{a.model}: reward={a.reward}, usable={a in usable}" for a in answers)
+        ambiguities.append(Ambiguity(
+            "insufficient-data", "Fewer than two solvers produced a comparable diff; rerun the panel.", seen,
+        ))
+        return AmbiguityReport(package.name, names, tuple(answers), tuple(ambiguities))
     for topic, field, question in _TOPICS:
         values = {
-            a.model: tuple(getattr(a, field)) for a in answers
+            a.model: tuple(getattr(a, field)) for a in usable
         }
         if len(set(values.values())) < 2:
             continue

@@ -106,3 +106,21 @@ def test_report_feedback_is_applied_to_the_spec_with_gates_rechecked(
     validate(revised)
     require_ok(revised)
     assert revised.requirements == spec.requirements
+
+
+def test_a_crashed_or_empty_solver_is_no_data_not_an_ambiguity(package: Path, tmp_path: Path) -> None:
+    def run(task: Path, model: str, out: Path) -> Trial:
+        return Trial(None, "") if model == "b" else Trial(1.0, DIFF)  # b crashed: no reward, no diff
+
+    only_a = run_panel(package, ["a", "b"], tmp_path / "w1", run)
+    assert [a.topic for a in only_a.ambiguities] == ["insufficient-data"]  # not 4 fake disagreements
+
+    third = run_panel(package, ["a", "b", "c"], tmp_path / "w2", run)
+    assert third.ok  # a and c agree; the crashed b is simply left out of the comparison
+
+
+def test_private_helpers_are_not_contract_disagreements(package: Path, tmp_path: Path) -> None:
+    with_helper = DIFF + "+def _normalise(x):\n+    return x\n"
+    report = run_panel(package, ["a", "b"], tmp_path / "w",
+                       fake_run({"a": DIFF, "b": with_helper}))
+    assert not any(a.topic == "signature" for a in report.ambiguities)
