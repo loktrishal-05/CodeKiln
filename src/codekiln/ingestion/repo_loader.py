@@ -10,7 +10,10 @@ import subprocess
 import zipfile
 from pathlib import Path
 
-_NO_HOOKS = ["-c", f"core.hooksPath={os.devnull}", "-c", "protocol.ext.allow=never"]
+# core.autocrlf=false: Git for Windows would otherwise check files out with CRLF, so the workspace
+# would not be the repo's real bytes (and patches built from it would not apply in the Linux container).
+_NO_HOOKS = ["-c", f"core.hooksPath={os.devnull}", "-c", "protocol.ext.allow=never",
+             "-c", "core.autocrlf=false"]
 _IDENTITY = ["-c", "user.name=codekiln", "-c", "user.email=codekiln@localhost"]
 _URL_PREFIXES = ("https://", "http://", "ssh://", "git://", "git@")
 

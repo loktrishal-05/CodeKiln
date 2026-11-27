@@ -12,7 +12,7 @@ _OUTPUT = """{
   "category": "<same as the plan>",
   "difficulty": "L1 | L2 | L3",
   "instruction": "<markdown; the only file the agent sees>",
-  "reference_diff": "<git diff adding the feature; no file deletions>",
+  "edits": [{"op": "insert_after", "path": "<existing file>", "symbol": "<existing top-level def/class>", "code": "<new python code>"}],
   "feature_tests": {"test_<feature>.py": "<pytest source>"},
   "f2p": ["tests/test_<feature>.py::test_<name>"],
   "requirements": [
@@ -27,34 +27,37 @@ EXAMPLE_SPEC = {
     "category": "api_cli",
     "difficulty": "L2",
     "instruction": (
-        "# Uppercase echo\n\n## Requirements\n"
-        "- REQ-1: `echo` takes `uppercase: bool = False` and upper-cases the message.\n"
-        "- REQ-2: `CliRunner` captures the uppercased output.\n\n"
-        "## Errors\n- `TypeError` when `uppercase` is not a bool.\n"
+        "# Upper-case helper\n\n## Requirements\n"
+        "- REQ-1: `click.utils.echo_upper(message: str) -> str` returns the message upper-cased.\n"
+        "- REQ-2: `echo_upper` returns an empty string unchanged.\n\n"
+        "## Errors\n- `AttributeError` when `message` is not a string.\n"
     ),
-    "reference_diff": (
-        "diff --git a/src/click/utils.py b/src/click/utils.py\n"
-        "--- a/src/click/utils.py\n+++ b/src/click/utils.py\n"
-        "@@ -1 +1,2 @@\n-def echo():\n+def echo(uppercase=False):\n+    pass\n"
-    ),
+    "edits": [
+        {"op": "add_import", "path": "src/click/utils.py", "line": "import re"},
+        {"op": "insert_after", "path": "src/click/utils.py", "symbol": "echo",
+         "code": "def echo_upper(message: str) -> str:\n    \"\"\"Return MESSAGE upper-cased.\"\"\"\n"
+                 "    return message.upper()"},
+    ],
     "feature_tests": {
-        "test_echo_uppercase.py": (
-            "from click import echo\nfrom click.testing import CliRunner\n\n"
-            "def test_req1_uppercases():\n    assert echo\n\n"
-            "def test_req2_runner():\n    assert CliRunner\n"
+        "test_echo_upper.py": (
+            "from click.utils import echo_upper\n\n"
+            "def test_req1_uppercases():\n    assert echo_upper('abc') == 'ABC'\n\n"
+            "def test_req2_empty_string():\n    assert echo_upper('') == ''\n"
         )
     },
     "f2p": [
-        "tests/test_echo_uppercase.py::test_req1_uppercases",
-        "tests/test_echo_uppercase.py::test_req2_runner",
+        "tests/test_echo_upper.py::test_req1_uppercases",
+        "tests/test_echo_upper.py::test_req2_empty_string",
     ],
     "requirements": [
-        {"id": "REQ-1", "statement": "echo uppercases",
-         "tests": ["tests/test_echo_uppercase.py::test_req1_uppercases"]},
-        {"id": "REQ-2", "statement": "CliRunner sees it",
-         "tests": ["tests/test_echo_uppercase.py::test_req2_runner"]},
+        {"id": "REQ-1", "statement": "echo_upper upper-cases",
+         "tests": ["tests/test_echo_upper.py::test_req1_uppercases"]},
+        {"id": "REQ-2", "statement": "echo_upper keeps an empty string empty",
+         "tests": ["tests/test_echo_upper.py::test_req2_empty_string"]},
     ],
 }
+# The files the example's edits refer to, so a test can prove the example applies for real.
+EXAMPLE_WORKSPACE = {"src/click/utils.py": "import os\n\n\ndef echo(message):\n    print(message)\n"}
 
 # The format rules that code enforces, in the order they are usually broken. Also restated on every
 # repair message, because a weaker model forgets them by the second attempt.
@@ -65,8 +68,12 @@ FORMAT (checked by code):
 2. "feature_tests" keys are bare file names like "test_json_param.py": no directory, no tests/ prefix.
 3. Every id in "f2p" and in each requirement's "tests" is "tests/<that same file name>::<test function>".
    Never write tests/feature/ in an id; the harness places the files itself.
-4. "reference_diff" starts with "diff --git ", only ADDS behaviour, and every @@ hunk header's line
-   counts must match its body exactly. Do not touch tests/, conftest.py or CI files.
+4. Do NOT write a diff. "edits" says where the new code goes and the tool builds the patch from the
+   real files. Each edit is one of: {"op": "add_import", "path": P, "line": "import json"} |
+   {"op": "insert_after", "path": P, "symbol": "<an existing top-level def or class in P>", "code": "..."} |
+   {"op": "append", "path": P, "code": "..."} | {"op": "new_file", "path": P, "code": "..."}.
+   Use only paths and symbol names that appear in the context pack. Edits only ADD code (never
+   rewrite existing code) and never touch tests/, conftest.py or CI files.
 5. "task" is kebab-case with at least two words, e.g. "click-json-param"."""
 
 _RULES = """\

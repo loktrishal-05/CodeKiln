@@ -25,6 +25,8 @@ class Plan:
     # Repo Scout text for the writer prompt: not part of the slot's identity, so it never changes
     # equality, the diversity guard or the ledger fingerprint.
     context: str = field(default="", compare=False, repr=False)
+    # Checkout the writer's edits are applied to (so the reference diff is computed, not guessed).
+    workspace: str = field(default="", compare=False, repr=False)
 
     @property
     def items(self) -> frozenset[str]:
