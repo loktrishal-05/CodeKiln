@@ -6,7 +6,7 @@ Prototype deadline **Dec 6, 2026**; finale **Dec 20, 2026** (New Delhi). Each ch
 
 - [x] Repo scaffold, state machine, SQLite schema, CLI skeleton
 - [x] **[L]** Ingestion: repo loader (URL/dir/zip), commit pin, hooks disabled, zip-slip guard
-- [ ] **[C]** Profiler + Python Dockerfile bootstrap, one cached image per (repo, commit), ARM64/x86
+- [x] **[C]** Profiler + Python Dockerfile bootstrap, one cached image per (repo, commit), ARM64/x86
 - [ ] **[C]** Sandbox runner (hardened docker-py); [x] **[L]** CTRF/JUnit parsers
 - [x] **[L]** Planner: reverse extract + forward synth + AST diversity guard
 - [ ] **[S]** Synthesizer: instruction.md, reference diff, F2P tests, RTM coverage gate
