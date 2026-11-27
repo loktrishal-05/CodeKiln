@@ -2,17 +2,46 @@
 
 Distilled from the *Innodata Coding Task Factory Master Report* (Innodata Frontier AI Hackathon 2026, Track 1; the report calls the product "CodeForge Factory", we call it **CodeKiln**). The PDF is not committed; this file is the working source of truth.
 
+## Official rules (override everything below)
+
+From the organizers' *Participant Guide & Technical Specifications* (hack2skill dashboard -> Resources). Where this spec and the guide disagree, the guide wins.
+
+- **One repo, chosen from three**: `pallets/click` (pytest), `colinhacks/zod` (vitest), `open-source-parsers/jsoncpp` (ctest). **We use `pallets/click`** because our planner is Python-AST based. Base: tag `8.5.1`, commit `cf19179e8e2fd54c601378cec9e0d21bb12b6fb1` (verified 2026-11-27: 2434 passed, 24 skipped, 0 failed on Python 3.12).
+- **Feature tasks only.** No bug fixes. Every task starts from the **unmodified** base commit, and the generated feature **must not exist upstream**. So we never strip existing code to make a task: reverse extraction is a planning signal only (see Discovery).
+- **5 distinct tasks** from the repo, differing in behaviour, rules or interactions (rewording/renaming does not count).
+- **Harbor CLI 0.25.x** (`pip install "harbor==0.25.*"`); its task schema is `schema_version = "1.4"`. Judges run, per task:
+  - `harbor run -p <task> -a nop -k 1 -o <out> --no-delete -y` -> reward **0.0**
+  - `harbor run -p <task> -a oracle -k 1 -o <out> --no-delete -y` -> reward **1.0**
+- **Reward formula** (our `tests/test.sh` must implement exactly this): any P2P (regression) test fails -> `0.0`; else `passed_F2P / total_F2P`. A missing reward = environment crash.
+- **Rubric** (hack2skill page): Working Implementation 25%, Accuracy & Validation 25%, Meaningful Variation 20%, Originality & Engineering 15%, Practical Impact & Clarity 15%. Judges re-run the pipeline in a standard Docker setup; automated reliability beats hand-fixed output.
+- **Deliverables**: runnable source + setup, inspectable sample packages tagged to the base commit, validation evidence (logs, metrics, failure cases, documented manual fixes, mutation testing), technical explanation (design, assumptions, reused components, **every model and tool declared**), walkthrough video, deck (template in Resources). Deadline **Dec 6, 2026, 11:55 PM IST**.
+- Out of scope: tasks that create/exploit vulnerabilities, tests needing network or real credentials.
+
 ## Goal
 
-One reusable pipeline that takes a supplied working repo (target: 3 repos) and emits realistic **feature-development** task packages for evaluating AI coding systems. Judges grade the pipeline, not hand-written tasks.
+One reusable pipeline that takes the click repo at a pinned commit and emits 5+ realistic **feature-development** task packages for evaluating AI coding systems. Judges grade the pipeline, not hand-written tasks.
 
-Rubric weights: Validity 25%, Repeatability 25%, Variation 20%, Originality 15%, Impact/Demo 15%.
+## Task package (per task, Harbor layout)
 
-## Task package (per task)
+```
+<task>/
+  instruction.md            # only file the evaluated agent sees
+  task.toml                 # schema_version="1.4"; [metadata] repo, base_commit (40 chars), license,
+                            #   category, difficulty; [environment] network_mode="no-network";
+                            #   [verifier] environment_mode="separate"
+  environment/Dockerfile    # clones click at base_commit, installs deps, all existing tests pass
+  solution/solve.sh         # `git apply` of solution/reference.diff
+  solution/reference.diff
+  tests/test.sh             # runs F2P + P2P with pytest --ctrf /logs/verifier/ctrf.json,
+                            #   writes /logs/verifier/reward.txt per the reward formula
+  tests/fail_to_pass.json   # SWE-bench style node ids
+  tests/pass_to_pass.json
+  tests/test_<feature>.py   # the new feature tests
+  generation_receipt.json   # ours: gate results, hashes, model, cost
+  manifest.sha256
+```
 
-`task.toml` (Harbor v1.4) · `instruction.md` · `solution/reference.diff` · `tests/` (F2P tests + P2P manifest) · `generation_receipt.json` · `manifest.sha256`
-
-Must prove: (1) base tests pass, (2) feature tests fail on base, (3) reference patch passes feature + regression tests.
+Must prove (and the gate checks by running Harbor itself): nop -> 0.0 with every P2P passing, oracle -> 1.0, each x3.
 
 ## State machine
 
@@ -30,9 +59,9 @@ Code: `src/codekiln/states.py`.
 | IDs | Area | Summary |
 |---|---|---|
 | FR-001-004 | Ingestion & env | Git URL / dir / zip; record `base_commit`; disable git hooks; detect stack + test runner; one cached Docker base image per (repo, commit) |
-| FR-005-007 | Discovery & diversity | Reverse extraction (coverage + dependency graph BFS) and forward synthesis (5 categories: Core Logic, API/CLI, Validation, Persistence, Cross-Module); dedupe by AST/file overlap, Jaccard < 0.4 |
+| FR-005-007 | Discovery & diversity | Reverse extraction (coverage + dependency graph BFS) **locates** where features live; forward synthesis proposes **new** features there (5 categories: Core Logic, API/CLI, Validation, Persistence, Cross-Module); dedupe by AST/file overlap, Jaccard < 0.4. Never delete upstream code to create a task |
 | FR-008-010 | Contract-first synthesis | `instruction.md` with explicit signatures/errors; reference diff; F2P tests + P2P manifest; spec-test interface linter |
-| FR-011-016 | Execution & mutation | CTRF/JUnit parsing; State A/B/C (x3 for flakiness); 4-class probes: No-Op, Hardcoded Stub, Partial-Impl, 3-5 semantic mutants (>=80% killed) |
+| FR-011-016 | Execution & mutation | Runner = `harbor run` (nop for A/B, oracle for C) and CTRF read back from the trial's `verifier/` dir; State A/B/C (x3 for flakiness); 4-class probes: No-Op, Hardcoded Stub, Partial-Impl, 3-5 semantic mutants (>=80% killed), each run as a Harbor trial with a swapped `solution/` |
 | FR-017-027 | Packaging, eval, ops | Harbor packager + pluggable Innodata adapter, single-commit scrubber, no-network runtime, policy filter, cost ledger, separate verifier container, static HTML dashboard |
 
 ## Architecture
@@ -43,7 +72,7 @@ Code: `src/codekiln/states.py`.
 | Layer | MVP | Production |
 |---|---|---|
 | Orchestration | Typed async Python state machine, tiered LLM router | Temporal DAGs, prompt caching, vLLM |
-| Sandbox | docker-py, 2-4 containers | Modal / K8s gVisor / Firecracker |
+| Sandbox | Harbor 0.25 docker environment (same path the judges use) | Harbor on Modal / Daytona / K8s |
 | Storage | SQLite WAL (5 tables) + atomic FS packages | PostgreSQL 16, object-locked S3, OCI registry, Redis |
 | Interface | Typer CLI + static HTML report | FastAPI + React HITL portal, OIDC/RBAC |
 
@@ -61,6 +90,13 @@ Tables: `repositories`, `factory_runs`, `task_candidates`, `validation_execution
 | Mutation dossier | `mutation_dossier.json` | 100% kill No-Op/Stub, >=80% semantic; one strengthen pass |
 | Security log | `security_audit.json` | 1 commit in git, egress probe fails, no site-packages leak, diff policy, canary, secret scan |
 | Eval scorecard | `eval_receipt.json` | model, resolved, bloat ratio, blast radius, ATIF trace, USD/solve |
+
+## Variation proof (Meaningful Variation, 20%)
+
+Jaccard on files/AST shows tasks touch different code; it does not show they ask for different behaviour. We prove that by execution:
+
+- **Cross-task oracle matrix** (`variation_matrix.json`): for every pair (i, j), run task j's tests against task i's reference patch (a Harbor trial of task j with task i's `solution/`). Distinct tasks give 1.0 on the diagonal and ~0.0 off it; any off-diagonal score > 0.5 means i and j overlap, and the planner must replace one of them.
+- **Model spread** (`eval_receipt.json`): run 2+ real agents through Harbor (`-a claude-code`, `-a codex`, ...). Tasks that every model solves or none solves are weak discriminators; report the per-task solve matrix.
 
 ## Trust boundaries
 
