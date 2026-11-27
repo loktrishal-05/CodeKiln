@@ -126,7 +126,7 @@ def probe_package(
             shutil.rmtree(dst)
         shutil.copytree(task, dst)
         (dst / "solution" / "reference.diff").write_text(m.diff, encoding="utf-8")
-        if bad := _malformed(m.diff):  # a patch that does not apply scores 0.0 and would count as killed
+        if bad := patch_problem(m.diff):  # an unapplicable patch would falsely count as killed
             raise ProbeError(f"internal: mutant {m.name} is not a valid patch: {bad}")
         reward = runner(dst, work / "jobs" / m.name)
         results.append(ProbeResult(m.name, m.kind, reward is not None and reward < 1.0, reward))
@@ -231,8 +231,12 @@ def _sides(hunk: _Hunk) -> tuple[int, int]:
     )
 
 
-def _malformed(diff: str) -> str:
-    """Why DIFF would not `git apply` (hunk counts disagree with the body), or ''."""
+def patch_problem(diff: str) -> str:
+    """Why DIFF would not `git apply` (hunk counts disagree with the body), or ''.
+
+    Shared by the mutation probes and the test critic so an unapplicable patch never counts as
+    evidence about the tests: it is rejected before any Harbor trial is run.
+    """
     _, hunks = _parse(diff)
     for h in hunks:
         m = re.match(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@", h.header)

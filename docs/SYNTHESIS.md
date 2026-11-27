@@ -30,6 +30,15 @@ linter pass; execution correctness is still decided later by Harbor in the 3-sta
 `tests/unit/test_six_slot_synthesis.py` exercises this exact path with the HTTP call faked and
 asserts all six packages plus the CSV events.
 
+## Test Author + Test Critic (#45)
+
+`codekiln test-critic PACKAGE RUN_ID --alternatives N` asks the model for N *different but correct*
+patches and executes each one in a copied Harbor task. A malformed or copied patch is rejected
+before the trial; a correct alternative scoring below 1.0 is recorded in `test_critic.json` as
+`too_narrow` with its exact reward. The verifier measures the reward, but the alternative's
+correctness is only the model's claim, so a low reward means "tests too narrow *or* alternative
+wrong": a person reviews it, and nothing is gated on it.
+
 ## Ideator + critic (#44)
 
 `codekiln ideate RUN_ID --candidates N` asks the writer for N specs per slot and writes
