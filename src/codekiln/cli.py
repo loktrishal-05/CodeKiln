@@ -238,7 +238,10 @@ def package(
     dest: Path,
     model: str = "codekiln",
     cost_usd: float = 0.0,
-    gates_ok: bool = True,
+    gates_ok: bool = typer.Option(
+        False, "--gates-ok/--no-gates-ok",
+        help="Caller asserts the execution gates passed; without it nothing is promoted.",
+    ),
     spec_sha256: str = "",
     candidate_id: int | None = None,
     run_id: int | None = None,

@@ -93,6 +93,9 @@ def promote(
         raise PackageRejected(f"{staging}: manifest verification failed")
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
-        shutil.rmtree(dest)
+        if (dest / "task.toml").is_file() or not any(dest.iterdir()):
+            shutil.rmtree(dest)  # replacing an earlier package of the same task
+        else:  # e.g. DEST was mistyped as the packages/ parent: never wipe that
+            raise PackageRejected(f"{dest} exists and is not a Harbor task package; refusing to replace")
     os.replace(staging, dest)
     return dest

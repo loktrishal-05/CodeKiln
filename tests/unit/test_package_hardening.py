@@ -178,7 +178,7 @@ def test_cli_scrub_and_package_promote_and_update_ledger(tmp_path: Path) -> None
     db = _db_with_candidate(tmp_path, staging)
     dest = tmp_path / "packages" / staging.name
     pack = CliRunner().invoke(app, [
-        "package", str(staging), str(dest), "--model", MODELS[0], "--cost-usd", "0.42",
+        "package", str(staging), str(dest), "--gates-ok", "--model", MODELS[0], "--cost-usd", "0.42",
         "--spec-sha256", "a" * 64, "--candidate-id", "1", "--db", str(db),
     ])
     assert pack.exit_code == 0, pack.output
@@ -221,3 +221,21 @@ def test_cli_scrub_exits_nonzero_on_leaks(tmp_path: Path) -> None:
     res = CliRunner().invoke(app, ["scrub", str(task)])
     assert res.exit_code == 1, res.output
     assert "secret_scan" in res.output
+
+
+def test_cli_package_requires_an_explicit_gate_pass(tmp_path: Path) -> None:
+    staging = staged(tmp_path)
+    dest = tmp_path / "packages" / staging.name
+    res = CliRunner().invoke(app, ["package", str(staging), str(dest)])  # no --gates-ok
+    assert res.exit_code == 1, res.output
+    assert staging.is_dir() and not dest.exists()
+
+
+def test_promote_never_wipes_a_directory_that_is_not_a_package(tmp_path: Path) -> None:
+    staging = staged(tmp_path)
+    parent = tmp_path / "packages"
+    (parent / "other-task").mkdir(parents=True)
+    (parent / "other-task" / "task.toml").write_text("keep me")
+    with pytest.raises(PackageRejected, match="not a Harbor task package"):
+        promote(staging, parent, spec(staging.name), audit_task(staging))  # DEST mistyped as the parent
+    assert (parent / "other-task" / "task.toml").read_text() == "keep me" and staging.is_dir()
