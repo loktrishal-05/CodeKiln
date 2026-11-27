@@ -14,7 +14,7 @@ NEW_FUNC = (
     "diff --git a/src/click/utils.py b/src/click/utils.py\n"
     "--- a/src/click/utils.py\n"
     "+++ b/src/click/utils.py\n"
-    "@@ -1 +1,5 @@\n"
+    "@@ -1 +1,7 @@\n"
     " import os\n"
     "+def reverse_text(value: str, keep_case=True):\n"
     "+    return value[::-1]\n"

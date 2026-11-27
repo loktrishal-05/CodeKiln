@@ -17,7 +17,7 @@ from codekiln.planner.models import Plan
 from codekiln.states import MAX_REPAIR_RETRIES
 from codekiln.synthesis.models import FeatureSpec, SynthesisError, from_dict, validate
 from codekiln.synthesis.rtm import require_ok
-from codekiln.synthesis.spec_generator import render_prompt
+from codekiln.synthesis.spec_generator import FORMAT_RULES, render_prompt
 
 Post = Callable[[str, dict[str, str], dict[str, object]], Mapping[str, object]]
 
@@ -129,7 +129,7 @@ class LLMWriter:
                 messages = [
                     *base,
                     {"role": "assistant", "content": reply},
-                    {"role": "user", "content": f"Rejected: {last}\nReturn corrected JSON only."},
+                    {"role": "user", "content": f"Rejected: {last}\n{FORMAT_RULES}\nReturn corrected JSON only."},
                 ]
         raise SynthesisError(f"no valid spec after {self._retries + 1} attempts: {last}")
 
