@@ -6,6 +6,7 @@ and PROFILED/ENV_READY are skipped until the profiler lands.
 import shutil
 import sqlite3
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,7 +36,10 @@ def workspace_path(source: str, commit: str, workdir: Path) -> Path:
     return workdir / f"{name}-{commit[:12]}"
 
 
-def run_pipeline(source: str, slots: int, con: sqlite3.Connection, workdir: Path) -> RunSummary:
+def run_pipeline(
+    source: str, slots: int, con: sqlite3.Connection, workdir: Path,
+    remap: Mapping[str, str] | None = None,
+) -> RunSummary:
     if Path(source).exists():
         source = str(Path(source).resolve())  # same repo, same key, however it was spelled
     workdir.mkdir(parents=True, exist_ok=True)
@@ -48,7 +52,7 @@ def run_pipeline(source: str, slots: int, con: sqlite3.Connection, workdir: Path
         tmp.rename(ws)
 
     # pool larger than SLOTS so the difficulty dial has levels to choose from
-    chosen = balance(plan(ws, slots * 3), slots)
+    chosen = balance(plan(ws, slots * 3), slots, remap=remap)
 
     with con:
         con.execute(

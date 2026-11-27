@@ -18,12 +18,26 @@ def _todo(name: str) -> None:
     raise typer.Exit(2)
 
 
+def _remap(calibration: Path | None) -> dict[str, str] | None:
+    """The learned difficulty remap from `codekiln calibrate`, or None to use the heuristic."""
+    if calibration is None:
+        return None
+    from codekiln.evaluation.calibration import read_remap
+
+    try:
+        return read_remap(calibration)
+    except (OSError, ValueError) as e:
+        typer.echo(f"bad calibration file: {e}", err=True)
+        raise typer.Exit(2) from e
+
+
 @app.command()
 def run(
     repo: str,
     slots: int = typer.Option(6, min=1),  # the six click planner subsystems
     max_budget_usd: float = 5.0,  # accepted, not used here: the breaker lives in `synth` / `resume`
     workdir: Path = Path("workspaces"),
+    calibration: Path | None = None,
 ) -> None:
     """Plan task candidates from REPO (git URL, directory or zip) and record them in the ledger.
 
@@ -31,7 +45,7 @@ def run(
     """
     con = connect(Settings().db_path)
     try:
-        s = run_pipeline(repo, slots, con, workdir)
+        s = run_pipeline(repo, slots, con, workdir, remap=_remap(calibration))
     except IngestionError as e:
         typer.echo(f"ingestion failed: {e}", err=True)
         raise typer.Exit(1) from e
@@ -56,6 +70,7 @@ def factory(
     runs: int = typer.Option(3, min=1),
     agent: bool = typer.Option(False, help="Let a model order the allowed actions (metered)."),
     corpus: Annotated[list[Path] | None, typer.Option(help="Later checkout(s) of the repo: reject features already in them.")] = None,
+    calibration: Path | None = None,
 ) -> None:
     """Plan (or resume) a run, then drive every candidate through every gate to a package.
 
@@ -77,7 +92,7 @@ def factory(
     workspace: Path | None = None
     if repo is not None:
         try:
-            s = run_pipeline(repo, slots, con, workdir)
+            s = run_pipeline(repo, slots, con, workdir, remap=_remap(calibration))
         except IngestionError as e:
             typer.echo(f"ingestion failed: {e}", err=True)
             raise typer.Exit(1) from e
@@ -422,6 +437,49 @@ def blind_read(package: Path, out: Path | None = None) -> None:
         for p in report.problems:
             typer.echo(f"  {p}", err=True)
         raise typer.Exit(1)
+
+
+@app.command()
+def calibrate(
+    receipt: Path,
+    db: Path | None = None,
+    out: Path = Path("calibration.json"),
+) -> None:
+    """Compare the planner's L1/L2/L3 guess with measured solve rates from an eval receipt.
+
+    Writes calibration.json (per-task heuristic vs observed, plus a learned remap) that
+    `run --calibration` / `factory --calibration` feed back into the difficulty dial.
+    """
+    from codekiln.evaluation.calibration import calibrate as run_calibration
+    from codekiln.evaluation.calibration import learn_remap, write_calibration
+    from codekiln.evaluation.eval_runner import EvalError, read_receipt
+
+    try:
+        eval_receipt = read_receipt(receipt)
+    except (OSError, ValueError, EvalError) as e:
+        typer.echo(f"cannot read {receipt}: {e}", err=True)
+        raise typer.Exit(2) from e
+    heuristics: dict[str, str] = {}
+    ledger = db or Path(Settings().db_path)
+    if ledger.exists():
+        con = connect(str(ledger))
+        try:
+            for cid_path, difficulty in con.execute(
+                "SELECT p.package_path, c.difficulty FROM task_candidates c"
+                " JOIN task_plans p ON p.candidate_id = c.id"
+                " WHERE p.package_path IS NOT NULL AND c.difficulty IS NOT NULL"
+            ):
+                heuristics[Path(cid_path).name] = difficulty
+        finally:
+            con.close()
+    cals = run_calibration(eval_receipt, heuristics)
+    remap = learn_remap(cals)
+    write_calibration(out, cals, remap)
+    typer.echo(f"{len(cals)} task(s) calibrated, remap {remap or 'none yet'} -> {out}")
+    for c in cals:
+        flag = "" if c.discriminates else "  (does not separate models)"
+        typer.echo(f"  {c.task}: guessed {c.heuristic or '?'}, observed {c.observed}"
+                   f" ({c.solved}/{c.models} solved){flag}")
 
 
 @app.command()
