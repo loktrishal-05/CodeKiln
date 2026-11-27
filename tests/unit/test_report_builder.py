@@ -56,6 +56,21 @@ def test_full_report(tmp_path: Path) -> None:
     assert ">diversity ok<" in html and ">packaged<" in html and ">queued<" not in html
 
 
+def test_metrics_fall_back_to_dossier_and_nested_gates(tmp_path: Path) -> None:
+    _package(tmp_path / "pk")
+    d = tmp_path / "pk" / "env-prefix-options"
+    receipt = json.loads((d / "generation_receipt.json").read_text())
+    receipt.pop("mutation_kill_rate")
+    receipt.pop("nop_rewards")
+    receipt.pop("oracle_rewards")
+    receipt["gates"] = {"nop_rewards": [0.0], "oracle_rewards": [1.0]}
+    (d / "generation_receipt.json").write_text(json.dumps(receipt))
+    (d / "mutation_dossier.json").write_text(json.dumps({"semantic_kill_rate": 0.75}))
+    html = build_report(_ledger(tmp_path), 1, tmp_path / "pk")
+    assert "75%" in html  # from mutation_dossier.json, not the receipt
+    assert "0.00 &times;1" in html and "1.00 &times;1" in html  # from receipt.gates
+
+
 def test_empty_sections_say_what_to_run(tmp_path: Path) -> None:
     html = build_report(_ledger(tmp_path), 1)
     assert "codekiln matrix" in html and "No packaged tasks found" in html
