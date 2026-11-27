@@ -19,6 +19,9 @@ _TEST_FILE = re.compile(r"test_[a-z0-9_]+\.py")
 _ADDED = re.compile(r"^\+(?!\+\+)", re.MULTILINE)
 _DELETED_FILE = re.compile(r"^deleted file mode ", re.MULTILINE)
 _DIFF_HEADER = "diff --git "
+_DIFF_PATH = re.compile(r"^diff --git a/\S+ b/(\S+)", re.MULTILINE)
+# Feature tests ship separately in feature_tests; a reference diff must not touch the test setup.
+_TEST_INFRA = re.compile(r"(?:^|/)(?:conftest\.py|pytest\.ini|tox\.ini|setup\.cfg)$|^tests/")
 
 
 class SynthesisError(ValueError):
@@ -92,6 +95,9 @@ def validate(spec: FeatureSpec) -> None:
         raise SynthesisError("reference_diff must add the feature (no added lines found)")
     if deleted := _DELETED_FILE.findall(spec.reference_diff):
         raise SynthesisError(f"feature tasks may not delete files ({len(deleted)} deletions)")
+
+    if infra := sorted(p for p in _DIFF_PATH.findall(spec.reference_diff) if _TEST_INFRA.search(p)):
+        raise SynthesisError(f"reference_diff touches test infrastructure: {infra}")
 
     declared = set(REQ_ID.findall(spec.instruction))
     if missing := sorted(set(ids) - declared):

@@ -43,6 +43,10 @@ DIFF = (
 )
 
 
+def _touch(path: str) -> str:
+    return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1,2 @@\n+x = 1\n"
+
+
 def _spec(**over: Any) -> FeatureSpec:
     kw: dict[str, Any] = {
         "task": "click-echo-uppercase",
@@ -104,6 +108,9 @@ def test_defined_nodes_handles_classes_and_parametrised_ids() -> None:
         ({"difficulty": "hard"}, "L1/L2/L3"),
         ({"reference_diff": "--- a/x\n+++ b/x\n"}, "diff --git"),
         ({"reference_diff": f"{DIFF}deleted file mode 100644\n"}, "delete files"),
+        ({"reference_diff": DIFF + _touch("conftest.py")}, "test infrastructure"),
+        ({"reference_diff": DIFF + _touch("tests/test_core.py")}, "test infrastructure"),
+        ({"reference_diff": DIFF + _touch("pytest.ini")}, "test infrastructure"),
         ({"requirements": ()}, "at least one REQ"),
     ],
 )
