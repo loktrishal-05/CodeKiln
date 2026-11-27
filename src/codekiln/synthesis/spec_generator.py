@@ -35,6 +35,10 @@ def render_prompt(plan: Plan, *, repo: str, base_commit: str) -> str:
     """Prompt for one plan slot. Repo-derived text is wrapped as untrusted per the trust model."""
     files = "\n".join(f"- {f}" for f in sorted(plan.files))
     symbols = "\n".join(f"- {s}" for s in sorted(plan.symbols))
+    scout = (
+        "\nexisting API, dependents and tests (match these conventions):\n" + plan.context + "\n"
+        if plan.context else ""
+    )
     return f"""\
 Design one new {plan.category} feature for {repo} at {base_commit}.
 
@@ -48,7 +52,7 @@ files it should touch:
 
 public symbols already there:
 {symbols}
-</untrusted_repo_content>
+{scout}</untrusted_repo_content>
 
 {_RULES}
 """

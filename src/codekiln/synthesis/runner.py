@@ -8,7 +8,7 @@ import hashlib
 import json
 import shutil
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from codekiln.billing.ledger import Budget, BudgetExceeded
@@ -18,6 +18,7 @@ from codekiln.states import State
 from codekiln.synthesis.emit import write_package
 from codekiln.synthesis.llm_router import RouterError, Writer
 from codekiln.synthesis.models import FeatureSpec, SynthesisError, validate
+from codekiln.synthesis.scout import context_pack
 from codekiln.validation.blind_reader import lint_instruction
 
 MAX_ATTEMPTS = 3
@@ -47,6 +48,7 @@ def synthesize(
     packages: Path,
     max_attempts: int = MAX_ATTEMPTS,
     budget: Budget | None = None,
+    workspace: Path | None = None,
 ) -> SynthSummary:
     run = con.execute(
         "SELECT r.url, r.base_commit FROM factory_runs f JOIN repositories r ON r.id = f.repo_id"
@@ -76,7 +78,13 @@ def synthesize(
                 out.stopped = f"BUDGET_EXCEEDED: {e}"
                 break
         try:
-            spec = writer.write(load_plan(plan_json), repo=repo_url, base_commit=base_commit)
+            plan = load_plan(plan_json)
+            if workspace is not None:
+                try:  # the pack is a hint: a repo it cannot read must not block synthesis
+                    plan = replace(plan, context=context_pack(workspace, plan.files))
+                except (OSError, ValueError):
+                    pass
+            spec = writer.write(plan, repo=repo_url, base_commit=base_commit)
             validate(spec)  # the task name becomes a path: check it before it is used (and rmtree'd)
         except BudgetExceeded as e:
             out.stopped = f"BUDGET_EXCEEDED: {e}"

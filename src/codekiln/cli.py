@@ -64,6 +64,7 @@ def factory(
     from codekiln.billing.ledger import BillingLedger, Budget, Pricing
     from codekiln.factory import run_factory
     from codekiln.orchestrator import LLMChooser
+    from codekiln.pipeline import workspace_path
     from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError, http_post
 
     if (repo is None) == (run_id is None):
@@ -72,13 +73,14 @@ def factory(
     settings = Settings()
     ledger = db or Path(settings.db_path)
     con = connect(str(ledger))
+    workspace: Path | None = None
     if repo is not None:
         try:
             s = run_pipeline(repo, slots, con, workdir)
         except IngestionError as e:
             typer.echo(f"ingestion failed: {e}", err=True)
             raise typer.Exit(1) from e
-        run_id = s.run_id
+        run_id, workspace = s.run_id, s.workspace
         typer.echo(f"run {run_id}: planned {s.new + s.existing} candidates at {s.base_commit[:12]}")
     assert run_id is not None
     try:
@@ -95,11 +97,19 @@ def factory(
         bills, run_id, settings.max_budget_usd if max_budget_usd is None else max_budget_usd,
         config.model, pricing,
     )
+    if workspace is None:  # a resumed run: find the checkout the planner made
+        row = con.execute(
+            "SELECT r.url, r.base_commit FROM factory_runs f JOIN repositories r ON r.id = f.repo_id"
+            " WHERE f.id = ?", (run_id,),
+        ).fetchone()
+        workspace = workspace_path(row[0], row[1], workdir) if row else None
+    if workspace is not None and not workspace.is_dir():
+        workspace = None  # no checkout on this machine: writers just get no Repo Scout pack
     chooser = LLMChooser(config, post=budget.meter_post(http_post), budget=budget) if agent else None
     result = run_factory(
         con, run_id, writer=LLMWriter(config, post=budget.meter_post(http_post)),
         staging=work / "staging", dest=dest, work=work, db=ledger, budget=budget,
-        runs=runs, model=config.model, chooser=chooser,
+        runs=runs, model=config.model, chooser=chooser, workspace=workspace,
     )
     work.mkdir(parents=True, exist_ok=True)  # the trace of who picked each action, for the report
     (work / "orchestrator_decisions.json").write_text(

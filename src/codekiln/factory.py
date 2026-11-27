@@ -146,10 +146,11 @@ def run_factory(
     model: str = "codekiln",
     max_steps: int = DEFAULT_MAX_STEPS,
     chooser: Chooser | None = None,
+    workspace: Path | None = None,
 ) -> FactorySummary:
     """Drive every candidate of RUN_ID as far as its gates allow; safe to call again to resume."""
     out = FactorySummary()
-    synth = synthesize(con, run_id, writer, staging, budget=budget)
+    synth = synthesize(con, run_id, writer, staging, budget=budget, workspace=workspace)
     out.steps += 1
     out.stopped = synth.stopped
     ctx = Context(con, db, work, dest, runs, model,

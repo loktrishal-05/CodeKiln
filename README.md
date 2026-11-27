@@ -26,7 +26,7 @@ Prove a set of tasks asks for different behaviour (cross-task oracle matrix, ~10
 codekiln matrix packages/task-a packages/task-b ... --out variation_matrix.json
 ```
 
-One command from repo to packages: `codekiln factory REPO [--slots 6]` (or `codekiln factory --run-id N` to resume). The ledger status of each candidate picks its next stage (synthesize, verify, probe, package); a failed gate rejects it with the exact reason, and re-running skips finished work. Needs Docker, Harbor and `CODEKILN_LLM_API_KEY`. With `--agent` a model orders the allowed actions (metered); an answer outside the allowed list, a bad reply, a provider failure or an empty budget falls back to the fixed order, and every choice is logged to `orchestrator_decisions.json`. The gates still decide.
+One command from repo to packages: `codekiln factory REPO [--slots 6]` (or `codekiln factory --run-id N` to resume). The ledger status of each candidate picks its next stage (synthesize, verify, probe, package); a failed gate rejects it with the exact reason, and re-running skips finished work. Needs Docker, Harbor and `CODEKILN_LLM_API_KEY`. With `--agent` a model orders the allowed actions (metered); an answer outside the allowed list, a bad reply, a provider failure or an empty budget falls back to the fixed order, and every choice is logged to `orchestrator_decisions.json`. The gates still decide. The writer prompt also carries a bounded Repo Scout pack (public API, dependents, existing test names) for the files a slot touches, inside the untrusted-content wrapper.
 
 Run the execution gate on a packaged task: `codekiln verify PACKAGE [--db LEDGER] [--runs 3]`.
 It runs Harbor `nop` (state A + 3x B) and `oracle` (3x C), writes `flakiness_quarantine.json`,
