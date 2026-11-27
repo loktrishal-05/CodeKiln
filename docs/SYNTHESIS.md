@@ -47,6 +47,14 @@ spec that fails `validate` / RTM / blind-reader, ignores the slot's planned symb
 kept task name, or is more than 50% token-overlapping with the baseline or a kept proposal. Only
 the model proposes — admission stays in code, and execution correctness still belongs to Harbor.
 
+## Adversarial mutants (#46)
+
+`codekiln probe PACKAGE --adversarial N --run-id RUN_ID` asks the model for N plausible-but-wrong
+diffs. Code rejects malformed, copied, duplicated or wholesale-rewritten patches before any trial;
+the accepted mutants join the four deterministic classes as `kind: "adversarial"`. Every model
+call is metered in `billing_ledger.csv`, and a surviving adversarial mutant fails the dossier with
+its exact name — the writer's confidence is never a verdict.
+
 ## What consumes what
 
 | Consumer | Reads | From |
