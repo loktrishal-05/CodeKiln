@@ -55,6 +55,15 @@ the accepted mutants join the four deterministic classes as `kind: "adversarial"
 call is metered in `billing_ledger.csv`, and a surviving adversarial mutant fails the dossier with
 its exact name — the writer's confidence is never a verdict.
 
+## Blind solver panel (#47)
+
+`codekiln blind-panel PACKAGE --model A --model B [--model C]` runs 2-3 Harbor agents that see only
+`instruction.md`. Code compares their added signatures, defaults, touched files and literals; any
+disagreement becomes a concrete question in `ambiguity_report.json` (`spec_feedback`) instead of a
+model's opinion. A report with ambiguities fails the command so the spec can be revised before it
+is sealed. `codekiln revise-spec SPEC.json ambiguity_report.json OUT.json` appends those questions
+to the instruction and re-runs `validate` + RTM before writing the revised spec.
+
 ## What consumes what
 
 | Consumer | Reads | From |
