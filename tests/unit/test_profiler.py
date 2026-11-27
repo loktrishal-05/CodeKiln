@@ -87,7 +87,11 @@ def test_profile_rejects_invalid_toml_missing_dir_and_escaping_symlink(tmp_path:
     outside.write_text("[project]\nname = 'x'\n", encoding="utf-8")
     escaped = tmp_path / "escaped"
     escaped.mkdir()
-    (escaped / "pyproject.toml").symlink_to(outside)
+    try:
+        (escaped / "pyproject.toml").symlink_to(outside)
+    except OSError as e:
+        # Windows needs Developer Mode / SeCreateSymbolicLinkPrivilege; CI on Linux covers this.
+        pytest.skip(f"cannot create symlink on this host: {e}")
     with pytest.raises(ProfileError, match="escapes repo"):
         profile_repo(escaped)
 
