@@ -152,3 +152,14 @@ def test_red_team_rejects_invalid_task_dir(tmp_path: Path) -> None:
     with pytest.raises(RedTeamError, match="instruction.md"):
         red_team_package(bad, tmp_path / "w")
     assert isinstance(Attack("x", "hardcode", "#!/bin/bash\n"), Attack)
+
+
+def test_read_hidden_never_uses_solution_because_only_the_oracle_can_see_it(tmp_path: Path) -> None:
+    """Found with a real Harbor trial: under `-a oracle`, /solution/reference.diff is readable (and
+    /tests is absent). A real agent never gets /solution, so an attack that applies it scores the REAL
+    answer and would block every good package. The attack must hunt for leaks everywhere else."""
+    script = next(c.script for c in build_cheats(_staged(tmp_path)) if c.kind == "read-hidden")
+    assert "/solution/" not in script  # no read, copy or apply of anything under /solution
+    assert "-path /solution" in script  # it is explicitly pruned from the search
+    assert "git apply" in script and "git log -p --all" in script  # it still tries the real leak routes
+    assert "\r" not in script

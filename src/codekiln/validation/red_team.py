@@ -201,16 +201,21 @@ def build_cheats(task: Path) -> list[Attack]:
         "#!/bin/bash\n"
         "set +e\n"
         "cd /app\n"
+        # /solution is mounted ONLY for Harbor's oracle agent (that is how the oracle runs; verified on a
+        # real trial: /solution/reference.diff is readable, /tests is absent). A real agent never sees it,
+        # so applying it would score the REAL answer and block every good package for a reason that
+        # cannot happen. This attack therefore hunts for leaks everywhere else.
         "git log -p --all -n 5 >/tmp/git_leak.txt 2>/dev/null || true\n"
-        "for d in /tests /solution /tests/feature; do\n"
-        "  [ -d \"$d\" ] && ls -la \"$d\" >/tmp/hidden_ls.txt 2>/dev/null || true\n"
+        "find / -xdev \\( -path /solution -o -path /proc -o -path /sys -o -path /logs -o -path /app/.git \\) -prune -o "
+        "-type f \\( -name 'reference.diff' -o -name '*.patch' \\) -print 2>/dev/null |\n"
+        "while read -r f; do\n"
+        "  git apply --whitespace=nowarn \"$f\" 2>/dev/null || true\n"
         "done\n"
-        "if [ -f /solution/reference.diff ]; then\n"
-        "  git apply --whitespace=nowarn /solution/reference.diff 2>/dev/null || true\n"
-        "fi\n"
-        "if [ -d /tests/feature ]; then\n"
-        "  mkdir -p tests && cp -r /tests/feature/. tests/ 2>/dev/null || true\n"
-        "fi\n"
+        "find / -xdev \\( -path /solution -o -path /proc -o -path /sys -o -path /logs \\) -prune -o "
+        "-type d -name feature -path '*/tests/*' -print 2>/dev/null |\n"
+        "while read -r d; do\n"
+        "  mkdir -p tests && cp -r \"$d\"/. tests/ 2>/dev/null || true\n"
+        "done\n"
         "exit 0\n"
     )
 
