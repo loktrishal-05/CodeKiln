@@ -152,3 +152,14 @@ def test_synth_without_key_exits_2(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     monkeypatch.setenv("CODEKILN_LLM_API_KEY", "")
     res = CliRunner().invoke(app, ["synth", str(run_id), "--db", str(tmp_path / "k.sqlite")])
     assert res.exit_code == 2 and "API_KEY" in res.output
+
+
+def test_same_task_name_does_not_overwrite_another_candidate(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    run_id = run_and_id(monkeypatch, tmp_path)
+    monkeypatch.setattr(LLMWriter, "write", lambda self, plan, *, repo, base_commit: make_spec())
+    res = invoke(monkeypatch, tmp_path, "synth", str(run_id), "--packages", str(tmp_path / "pkg"))
+    assert res.exit_code == 0, res.output
+    n = rows(tmp_path, f"SELECT COUNT(*) FROM task_candidates WHERE run_id = {run_id}")[0][0]
+    assert n >= 2 and len(list((tmp_path / "pkg").iterdir())) == n  # one package per candidate

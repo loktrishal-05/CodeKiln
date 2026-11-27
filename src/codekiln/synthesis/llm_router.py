@@ -8,7 +8,7 @@ import json
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from codekiln.planner.models import Plan
@@ -39,7 +39,7 @@ class Writer(Protocol):
 @dataclass(frozen=True)
 class ModelConfig:
     base_url: str
-    api_key: str
+    api_key: str = field(repr=False)  # never shows up in a traceback or log line
     model: str
     temperature: float = 0.2
     max_tokens: int = 8000
@@ -136,6 +136,8 @@ def http_post(url: str, headers: dict[str, str], payload: dict[str, object]) -> 
         raise RouterError(f"provider returned HTTP {e.code}") from e
     except (urllib.error.URLError, TimeoutError) as e:
         raise RouterError(f"provider request failed: {e}") from e
+    except ValueError as e:  # 200 with a non-JSON or non-UTF-8 body (proxy, HTML error page)
+        raise RouterError("provider returned a non-JSON body") from e
     if not isinstance(body, dict):
         raise RouterError("provider returned a non-object body")
     return body
