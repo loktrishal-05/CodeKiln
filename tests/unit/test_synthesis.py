@@ -159,12 +159,19 @@ def test_prompt_names_the_slot_and_wraps_repo_text() -> None:
 def test_the_prompts_worked_example_is_itself_a_valid_spec() -> None:
     """The example teaches the model the format; if it ever stopped passing our own gates it would
     teach something invalid, so it is held to validate + the RTM audit + the blind reader."""
-    from codekiln.synthesis.models import from_dict
+    import json
+    import tempfile
+
+    from codekiln.synthesis.llm_router import parse_spec
     from codekiln.synthesis.rtm import require_ok
-    from codekiln.synthesis.spec_generator import EXAMPLE_SPEC
+    from codekiln.synthesis.spec_generator import EXAMPLE_SPEC, EXAMPLE_WORKSPACE
     from codekiln.validation.blind_reader import lint_instruction
 
-    spec = from_dict(EXAMPLE_SPEC)
+    with tempfile.TemporaryDirectory() as tmp:
+        for rel, text in EXAMPLE_WORKSPACE.items():  # the files the example's edits refer to
+            (Path(tmp) / rel).parent.mkdir(parents=True, exist_ok=True)
+            (Path(tmp) / rel).write_text(text, encoding="utf-8", newline="\n")
+        spec = parse_spec(json.dumps(EXAMPLE_SPEC), Path(tmp))  # edits -> a real, applicable diff
     validate(spec)
     require_ok(spec)
     assert lint_instruction(spec.instruction).ok
