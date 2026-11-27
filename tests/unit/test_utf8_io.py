@@ -14,6 +14,25 @@ from codekiln.synthesis.emit import write_package
 SRC = Path(__file__).resolve().parents[2] / "src"
 
 
+def test_no_write_in_src_relies_on_the_platform_newline() -> None:
+    """On Windows write_text turns every LF into CRLF: a CRLF patch is "corrupt" to git, and CRLF in
+    test.sh / solve.sh / the Dockerfile breaks them inside the Linux containers Harbor builds."""
+    offenders = []
+    for path in sorted(SRC.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "write_text"
+                    and not any(k.arg == "newline" for k in node.keywords)):
+                offenders.append(f"{path.relative_to(SRC)}:{node.lineno}")
+    assert not offenders, "write_text without newline=: " + ", ".join(offenders)
+
+
+def test_a_built_package_has_no_crlf_in_any_file(tmp_path: Path) -> None:
+    package = write_package(tmp_path / "task", make_spec(), repo_url=REPO, base_commit=SHA)
+    crlf = [str(p.relative_to(package)) for p in package.rglob("*") if p.is_file() and b"\r\n" in p.read_bytes()]
+    assert crlf == []  # the reference patch, tests and scripts must be byte-for-byte LF
+
+
 def test_no_file_io_in_src_relies_on_the_platform_default_encoding() -> None:
     offenders = []
     for path in sorted(SRC.rglob("*.py")):

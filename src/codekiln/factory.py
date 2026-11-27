@@ -79,7 +79,7 @@ def _verify(ctx: Context, cid: int, package: Path) -> None:
 def _probe(ctx: Context, cid: int, package: Path) -> None:
     if ctx.corpus:  # cheapest gate first: a feature a later release already has is not new
         report = firewall_check(package, ctx.corpus)
-        (package / "firewall.json").write_text(report.to_json(), encoding="utf-8")
+        (package / "firewall.json").write_text(report.to_json(), encoding="utf-8", newline="\n")
         if not report.ok:
             _reject(ctx.con, cid, "firewall: already in a later release: "
                     + ", ".join(sorted({h.marker for h in report.hits})))

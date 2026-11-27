@@ -97,7 +97,7 @@ def verify_package(
     if verdict.state is State.STATE_C_ALL_PASS and not (task / "manifest.sha256").exists():
         # The emitter ships an empty pass_to_pass.json; the reward formula only guards regressions
         # once the gate's verified P2P set is in it. A sealed package keeps its manifest intact.
-        (task / "tests" / "pass_to_pass.json").write_text(json.dumps(sorted(verdict.p2p), indent=1), encoding="utf-8")
+        (task / "tests" / "pass_to_pass.json").write_text(json.dumps(sorted(verdict.p2p), indent=1), encoding="utf-8", newline="\n")
 
     if db is not None and db.exists():
         with sqlite3.connect(db) as con:

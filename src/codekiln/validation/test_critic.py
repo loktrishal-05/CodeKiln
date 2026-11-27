@@ -180,7 +180,7 @@ def critique_tests(
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(task, dst)
-        (dst / "solution" / "reference.diff").write_text(diff, encoding="utf-8")
+        (dst / "solution" / "reference.diff").write_text(diff, encoding="utf-8", newline="\n")
         reward = runner(dst, work / "jobs" / name)
         if reward is None:
             reason = "trial crashed; no executable verdict"
@@ -201,5 +201,5 @@ def critique_tests(
 
 def write_report(path: Path, critique: TestCritique) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(critique.to_json(), encoding="utf-8")
+    path.write_text(critique.to_json(), encoding="utf-8", newline="\n")
     return path

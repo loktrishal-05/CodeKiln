@@ -127,7 +127,7 @@ def probe_package(
         if dst.exists():
             shutil.rmtree(dst)
         shutil.copytree(task, dst)
-        (dst / "solution" / "reference.diff").write_text(m.diff, encoding="utf-8")
+        (dst / "solution" / "reference.diff").write_text(m.diff, encoding="utf-8", newline="\n")
         if bad := patch_problem(m.diff):  # an unapplicable patch would falsely count as killed
             raise ProbeError(f"internal: mutant {m.name} is not a valid patch: {bad}")
         reward = runner(dst, work / "jobs" / m.name)
@@ -142,7 +142,7 @@ def harbor_probe(task: Path, out: Path) -> float | None:
 
 def write_dossier(path: Path, dossier: Dossier) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(dossier.to_json(), encoding="utf-8")
+    path.write_text(dossier.to_json(), encoding="utf-8", newline="\n")
     return path
 
 

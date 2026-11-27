@@ -105,7 +105,7 @@ def require_ok(spec: FeatureSpec) -> RtmMap:
 
 def write_map(path: Path, spec: FeatureSpec) -> RtmMap:
     m = audit(spec)
-    path.write_text(m.to_json(), encoding="utf-8")
+    path.write_text(m.to_json(), encoding="utf-8", newline="\n")
     return m
 
 

@@ -110,7 +110,7 @@ def write_calibration(path: Path, calibrations: tuple[Calibration, ...], remap: 
             ],
         },
         indent=2,
-    ), encoding="utf-8")
+    ), encoding="utf-8", newline="\n")
     return path
 
 

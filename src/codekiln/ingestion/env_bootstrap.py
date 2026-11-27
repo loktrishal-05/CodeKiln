@@ -138,7 +138,7 @@ def bootstrap_env(
 
     with tempfile.TemporaryDirectory(prefix="codekiln-build-") as tmp:
         df_path = Path(tmp) / "Dockerfile"
-        df_path.write_text(dockerfile, encoding="utf-8")
+        df_path.write_text(dockerfile, encoding="utf-8", newline="\n")
         build = runner(
             ["build", "--platform", docker_platform, "-t", tag, "-f", str(df_path), str(repo_dir)]
         )

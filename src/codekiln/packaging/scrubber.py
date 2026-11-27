@@ -75,7 +75,7 @@ def audit_task(task: Path, egress_probe: EgressProbe | None = None) -> SecurityA
 
 def write_audit(path: Path, audit: SecurityAudit) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(audit.to_json(), encoding="utf-8")
+    path.write_text(audit.to_json(), encoding="utf-8", newline="\n")
     return path
 
 
