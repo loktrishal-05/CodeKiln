@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import sys
 import tomllib
 from pathlib import Path
 
@@ -70,8 +71,9 @@ def test_writes_harbor_layout(tmp_path: Path) -> None:
     docker = (d / "environment/Dockerfile").read_text()
     assert "--continue-on-collection-errors" in (d / "tests/test.sh").read_text()
     assert f"git checkout --quiet {SHA}" in docker and "pip install --no-cache-dir -e ." in docker
-    for f in ("solution/solve.sh", "tests/test.sh", "tests/reward.py"):
-        assert (d / f).stat().st_mode & 0o111
+    if sys.platform != "win32":  # Windows has no exec bit
+        for f in ("solution/solve.sh", "tests/test.sh", "tests/reward.py"):
+            assert (d / f).stat().st_mode & 0o111
     assert json.loads((d / "tests/fail_to_pass.json").read_text()) == ["tests/test_pluralize.py::test_one"]
     assert (d / "tests/feature/test_pluralize.py").exists()
 

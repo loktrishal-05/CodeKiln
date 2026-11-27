@@ -18,6 +18,8 @@ codekiln --help
 
 Requires Python 3.12+, Docker with the **buildx** plugin (Harbor builds its no-network egress sidecar with it; on Arch: `pacman -S docker-buildx`), and the Harbor CLI on PATH: `uv tool install "harbor==0.25.*"`.
 
+**Windows:** create the venv with a 3.12+ interpreter (`py -3.12 -m venv .venv`; the default `python` is often 3.10, which pip rejects with "requires a different Python"), use `copy .env.example .env`, and re-run `pip install -e ".[dev]"` after every `git pull` so new dependencies are installed. Docker Desktop and Harbor are only needed to run packages, not for `pytest`.
+
 Prove a set of tasks asks for different behaviour (cross-task oracle matrix, ~10 s per trial):
 
 ```bash
