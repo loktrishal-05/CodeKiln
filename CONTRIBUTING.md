@@ -25,6 +25,7 @@ Source code and docs only. Generated or heavy things stay local and are covered 
 Rules:
 
 - CI fails any tracked file over 1 MB. If you need a fixture, make it tiny; for anything larger, generate it in a test.
+- Exception: `samples/` holds the final submission packages and their Harbor logs (a required deliverable). Keep it under 1 MB per file.
 - Never `git add .` blindly; check `git status` first.
 - Never commit `.env` or keys. Use `.env.example`.
 - Demo videos/decks go in the hackathon portal, not git.

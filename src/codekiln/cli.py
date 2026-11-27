@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import typer
@@ -51,3 +52,26 @@ def report(
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
     typer.echo(f"Wrote {out}")
+
+
+@app.command()
+def matrix(
+    tasks: list[Path],
+    out: Path = Path("variation_matrix.json"),
+    work: Path = Path("runs/matrix"),
+    concurrency: int = 4,
+) -> None:
+    """Cross-task oracle matrix over TASKS (Harbor task dirs): proves they ask for different behaviour."""
+    from codekiln.evaluation.variation_matrix import run_matrix
+    from codekiln.validation import harbor_runner
+
+    def runner(dataset: Path) -> dict[str, float | None]:
+        return harbor_runner.run(dataset, work / "jobs", "oracle", concurrency)
+
+    m = run_matrix([t.resolve() for t in tasks], work, runner)
+    out.write_text(json.dumps(m, indent=2))
+    for name, row in zip(m["tasks"], m["reward"], strict=True):
+        typer.echo(f"{name:>24} " + " ".join("  -- " if r is None else f"{r:5.2f}" for r in row))
+    typer.echo(f"distinct={m['distinct']} overlaps={len(m['overlaps'])} broken={m['broken']} -> {out}")
+    if not m["distinct"]:
+        raise typer.Exit(1)
