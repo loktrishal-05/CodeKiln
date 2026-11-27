@@ -40,7 +40,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - [x] **[S]** Dry-run blind reader linter
 - [ ] **[H]** Static HTML replay viewer + rejected-candidates graveyard
 - ~~**[H]** Cross-repo portability matrix~~ replaced by the cross-task oracle matrix (Wave 1)
-- [ ] **[S]** Blind eval runner + `eval_receipt.json`; **[H]** leaderboard view (2+ frontier models)
+- [x] **[S]** Blind eval runner + `eval_receipt.json`; **[H]** leaderboard view (2+ frontier models)
 
 ## Wave 3: production (post-hackathon)
 

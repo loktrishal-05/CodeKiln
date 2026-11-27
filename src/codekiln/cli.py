@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Protocol
+from typing import Annotated, Protocol
 
 import typer
 
@@ -245,9 +245,36 @@ def spec_check(spec: Path, out: Path | None = None) -> None:
 
 
 @app.command(name="eval")
-def eval_(package: str, model: str) -> None:
-    """Blind-evaluate MODEL against PACKAGE in a separate verifier container."""
-    _todo("eval")
+def eval_(
+    packages: list[Path],
+    model: Annotated[list[str] | None, typer.Option("--model")] = None,
+    work: Path = Path("runs/eval"),
+    out: Path = Path("eval_receipt.json"),
+    db: Path | None = None,
+) -> None:
+    """Blind-evaluate PACKAGES with 2+ Harbor agents; write eval_receipt.json."""
+    from codekiln.evaluation.eval_runner import EvalError, record_rows, run_eval, write_receipt
+
+    models = model or ["claude-code", "codex"]
+    try:
+        r = run_eval(packages, models, work)
+    except (EvalError, OSError, ValueError) as e:
+        typer.echo(f"eval failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    write_receipt(out, r)
+    for row in r.rows:
+        typer.echo(
+            f"{row.task:>24} {row.model_id:<12} reward={row.reward} resolved={row.resolved}"
+            f" bloat={row.bloat_ratio} blast={row.blast_radius} ${row.usd_per_solve}"
+        )
+    for task in r.weak:
+        typer.echo(f"  weak discriminator: {task} (every model solved it, or none did)", err=True)
+    ledger = db or Path(Settings().db_path)
+    if ledger.exists():
+        with connect(str(ledger)) as con:
+            typer.echo(f"recorded {record_rows(con, r)} scorecard rows in {ledger}")
+    if not r.ok:
+        raise typer.Exit(1)
 
 
 @app.command()
