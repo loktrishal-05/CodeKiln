@@ -1,6 +1,7 @@
-"""Reverse mode: scan real repo code, build the import graph, and propose features to strip.
+"""Reverse mode: scan real repo code and build the import graph to LOCATE where features live.
 
-A feature is a module's public API plus every file that depends on it (BFS over reverse imports).
+Nothing is stripped or modified: tasks start from the unmodified commit. A located slot is a
+module's public API plus every file that depends on it (BFS over reverse imports).
 ponytail: static import graph only; add coverage.py weighting once the sandbox can run tests.
 """
 import ast

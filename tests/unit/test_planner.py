@@ -69,3 +69,16 @@ def test_plan_is_pairwise_diverse_and_capped(repo: Path):
     chosen = plan(repo, 3)
     assert 0 < len(chosen) <= 3
     assert all(jaccard(x.items, y.items) < 0.4 for i, x in enumerate(chosen) for y in chosen[i + 1 :])
+
+
+def test_forward_seeds_target_click_subsystems(tmp_path: Path):
+    for rel in ("types", "parser", "core", "termui", "utils"):
+        p = tmp_path / "src/click" / f"{rel}.py"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"def {rel}_api():\n    pass\n")
+    seeds = [p for p in forward_seeds(tmp_path) if p.mode == "forward"]
+    files = {p.files for p in seeds}
+    assert frozenset({"src/click/types.py"}) in files
+    assert frozenset({"src/click/parser.py", "src/click/core.py"}) in files  # parser/options
+    assert frozenset({"src/click/termui.py"}) in files
+    assert frozenset({"src/click/formatting.py"}) not in files  # absent module -> no seed

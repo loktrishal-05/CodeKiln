@@ -19,7 +19,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - [x] **[C]** Harbor `environment/Dockerfile` template for click @ base_commit (all existing tests pass in-image) (`packaging/harbor.py`, by [H])
 - [ ] **[C]** Harbor runner: `harbor run -a nop|oracle` wrapper -> reward + per-test CTRF from `verifier/` -> feeds the gate's `Runner`; [x] **[L]** CTRF/JUnit parsers
 - [x] **[L]** Planner: reverse extract + forward synth + AST diversity guard
-- [ ] **[L]** Planner: reverse mode becomes locate-only (no stripping); seeds target click subsystems (types, parser/options, formatting/help, shell completion, testing/CliRunner, termui)
+- [x] **[L]** Planner: reverse mode becomes locate-only (no stripping); seeds target click subsystems (types, parser/options, formatting/help, shell completion, testing/CliRunner, termui)
 - [ ] **[S]** Synthesizer: instruction.md, reference diff, F2P tests, RTM coverage gate (emits the Harbor layout in SPEC -> Task package)
 - [x] **[L]** 3-state x3 gate + flakiness quarantine
 - [ ] **[S]** 4-class mutation probes (>=80% kill), each probe = a Harbor trial with a swapped `solution/`
