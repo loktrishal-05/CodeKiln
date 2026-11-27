@@ -4,7 +4,7 @@ A factory that turns a working software repo into validated, tamper-resistant **
 
 Every candidate task must pass execution gates before it is packaged: base tests pass, feature tests fail on the base, the reference patch passes everything (each x3 for flakiness), adversarial mutants are killed, and every requirement maps to a test. Nothing an LLM self-reports is trusted.
 
-> Status: scaffold. CLI commands are stubs; see [docs/ROADMAP.md](docs/ROADMAP.md).
+> Status: prototype. Every Wave 1 `[S]` item and the packaging/scrubber item are in; see [docs/ROADMAP.md](docs/ROADMAP.md) for what remains.
 
 ## Quick start
 
@@ -25,6 +25,12 @@ Prove a set of tasks asks for different behaviour (cross-task oracle matrix, ~10
 ```bash
 codekiln matrix packages/task-a packages/task-b ... --out variation_matrix.json
 ```
+
+Seal a staged task: `codekiln scrub STAGING` writes `security_audit.json` and exits 1 on any
+anti-gaming violation; `codekiln package STAGING DEST --model NAME [--candidate-id ID --db LEDGER]`
+then writes `generation_receipt.json` + `manifest.sha256` and atomically promotes the directory.
+The promoted package is written to `task_plans.package_path`, so `codekiln eval` and
+`codekiln resume` can find it on a fresh checkout.
 
 ## Layout
 
