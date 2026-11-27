@@ -108,10 +108,11 @@ class LLMWriter:
         self._retries = retries
 
     def write(self, plan: Plan, *, repo: str, base_commit: str) -> FeatureSpec:
-        messages = [
+        base = [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": render_prompt(plan, repo=repo, base_commit=base_commit)},
         ]
+        messages = base
         last = "no attempt made"
         for _ in range(self._retries + 1):
             reply = complete(self._config, messages, self._post)
@@ -122,7 +123,11 @@ class LLMWriter:
                 return spec
             except SynthesisError as e:
                 last = str(e)
-                messages += [
+                # Each repair carries the original prompt plus only the LATEST failed reply and why
+                # it failed. Appending every attempt grew the request each time until a provider with
+                # a per-request token cap (Groq free tier: 8000) refused it with HTTP 413.
+                messages = [
+                    *base,
                     {"role": "assistant", "content": reply},
                     {"role": "user", "content": f"Rejected: {last}\nReturn corrected JSON only."},
                 ]
