@@ -11,10 +11,12 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
 
 from codekiln.planner.models import Plan
 from codekiln.states import MAX_REPAIR_RETRIES
+from codekiln.synthesis.edits import build_diff
 from codekiln.synthesis.models import FeatureSpec, SynthesisError, from_dict, validate
 from codekiln.synthesis.rtm import require_ok
 from codekiln.synthesis.spec_generator import FORMAT_RULES, render_prompt
@@ -81,8 +83,11 @@ def complete(config: ModelConfig, messages: list[dict[str, str]], post: Post) ->
     return content
 
 
-def parse_spec(text: str) -> FeatureSpec:
-    """Accept JSON with or without a markdown fence; anything else is a synthesis error."""
+def parse_spec(text: str, workspace: Path | None = None) -> FeatureSpec:
+    """Accept JSON with or without a markdown fence; anything else is a synthesis error.
+
+    A reply may carry `edits` (where new code goes) instead of a `reference_diff`: with a WORKSPACE
+    the diff is computed from the real files, so it applies by construction."""
     body = text.strip()
     if body.startswith("```"):
         body = body.split("\n", 1)[1] if "\n" in body else ""
@@ -95,6 +100,10 @@ def parse_spec(text: str) -> FeatureSpec:
         raise SynthesisError(f"completion is not valid JSON: {e.msg}") from e
     if not isinstance(raw, dict):
         raise SynthesisError("completion must be a JSON object")
+    if "edits" in raw and "reference_diff" not in raw:
+        if workspace is None:
+            raise SynthesisError("edits need the repo checkout; none is available, send reference_diff")
+        raw["reference_diff"] = build_diff(workspace, raw.pop("edits"))
     return from_dict(raw)
 
 
@@ -117,7 +126,7 @@ class LLMWriter:
         for _ in range(self._retries + 1):
             reply = complete(self._config, messages, self._post)
             try:
-                spec = parse_spec(reply)
+                spec = parse_spec(reply, Path(plan.workspace) if plan.workspace else None)
                 validate(spec)
                 require_ok(spec)
                 return spec

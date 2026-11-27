@@ -80,6 +80,7 @@ def synthesize(
         try:
             plan = load_plan(plan_json)
             if workspace is not None:
+                plan = replace(plan, workspace=str(workspace))  # edits are applied to this checkout
                 try:  # the pack is a hint: a repo it cannot read must not block synthesis
                     plan = replace(plan, context=context_pack(workspace, plan.files))
                 except (OSError, ValueError):
