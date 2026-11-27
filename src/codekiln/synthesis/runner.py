@@ -16,7 +16,7 @@ from codekiln.planner.models import load_plan
 from codekiln.states import State
 from codekiln.synthesis.emit import write_package
 from codekiln.synthesis.llm_router import RouterError, Writer
-from codekiln.synthesis.models import FeatureSpec, SynthesisError
+from codekiln.synthesis.models import FeatureSpec, SynthesisError, validate
 
 MAX_ATTEMPTS = 3
 
@@ -66,7 +66,10 @@ def synthesize(
         dst: Path | None = None
         try:
             spec = writer.write(load_plan(plan_json), repo=repo_url, base_commit=base_commit)
+            validate(spec)  # the task name becomes a path: check it before it is used (and rmtree'd)
             dst = packages / spec.task
+            if dst.exists():  # write_task overwrites, so another candidate's package would be lost
+                dst = packages / f"{spec.task}-c{cid}"
             write_package(dst, spec, repo_url=repo_url, base_commit=base_commit)
         except (SynthesisError, RouterError, PackageError, OSError, ValueError) as e:
             if dst is not None:
