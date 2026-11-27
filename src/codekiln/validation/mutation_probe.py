@@ -8,7 +8,7 @@ import json
 import re
 import shutil
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, cast
 
@@ -25,7 +25,7 @@ _NOOP = (
     "@@ -0,0 +1 @@\n"
     "+noop\n"
 )
-_HUNK_RE = re.compile(r"^(@@ -\d+(?:,\d+)? )\+(?:\d+)(?:,\d+)?( @@.*)$")
+_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
 _DEF_RE = re.compile(r"^\+(\s*)(?:async\s+)?def\s+(\w+)\(")
 _KINDS: tuple[Kind, ...] = ("nop", "stub", "partial", "semantic")
 _SEMANTIC = (
@@ -92,6 +92,7 @@ class Dossier:
 class _Hunk:
     header: str
     lines: tuple[str, ...]
+    pre: tuple[str, ...] = ()  # the `diff --git` / `---` / `+++` lines that open this hunk's file
 
 
 def build_mutants(reference_diff: str) -> list[Mutant]:
@@ -125,6 +126,8 @@ def probe_package(
             shutil.rmtree(dst)
         shutil.copytree(task, dst)
         (dst / "solution" / "reference.diff").write_text(m.diff, encoding="utf-8")
+        if bad := _malformed(m.diff):  # a patch that does not apply scores 0.0 and would count as killed
+            raise ProbeError(f"internal: mutant {m.name} is not a valid patch: {bad}")
         reward = runner(dst, work / "jobs" / m.name)
         results.append(ProbeResult(m.name, m.kind, reward is not None and reward < 1.0, reward))
     return _dossier(task.name, tuple(results), threshold)
@@ -193,21 +196,53 @@ def _dossier(task: str, probes: tuple[ProbeResult, ...], threshold: float) -> Do
 
 
 def _parse(diff: str) -> tuple[list[str], list[_Hunk]]:
+    """Split a unified diff into hunks, each carrying the file headers that precede it."""
     prefix: list[str] = []
     hunks: list[_Hunk] = []
+    pending: list[str] = []  # file headers waiting for their first hunk
+    in_hunk = False
     for line in diff.splitlines():
-        if line.startswith("@@ "):
-            hunks.append(_Hunk(line, ()))
-        elif hunks:
-            hunks[-1] = _Hunk(hunks[-1].header, (*hunks[-1].lines, line))
+        if line.startswith("diff --git "):
+            in_hunk, pending = False, [line]
+        elif line.startswith("@@ "):
+            hunks.append(_Hunk(line, (), tuple(pending)))
+            in_hunk, pending = True, []
+        elif in_hunk:
+            hunks[-1] = replace(hunks[-1], lines=(*hunks[-1].lines, line))
+        elif hunks or pending:
+            pending.append(line)
         else:
             prefix.append(line)
     return prefix, hunks
 
 
 def _dump(prefix: list[str], hunks: list[_Hunk]) -> str:
-    lines = [*prefix, *(line for h in hunks for line in (h.header, *h.lines))]
+    lines = [*prefix, *(line for h in hunks for line in (*h.pre, h.header, *h.lines))]
     return "\n".join(lines) + "\n"
+
+
+def _sides(hunk: _Hunk) -> tuple[int, int]:
+    """(old-side, new-side) line counts: context counts for both, `-` old only, `+` new only."""
+    body = [ln for ln in hunk.lines if not ln.startswith("\\")]
+    context = sum(1 for ln in body if ln[:1] in (" ", ""))
+    return (
+        context + sum(1 for ln in body if ln.startswith("-")),
+        context + sum(1 for ln in body if ln.startswith("+")),
+    )
+
+
+def _malformed(diff: str) -> str:
+    """Why DIFF would not `git apply` (hunk counts disagree with the body), or ''."""
+    _, hunks = _parse(diff)
+    for h in hunks:
+        m = re.match(r"^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@", h.header)
+        if not m:
+            return f"bad hunk header {h.header!r}"
+        old, new = _sides(h)
+        want = (int(m.group(1) or 1), int(m.group(2) or 1))
+        if (old, new) != want:
+            return f"{h.header!r} says {want} but the body has {(old, new)}"
+    return ""
 
 
 def _added(hunk: _Hunk) -> tuple[int, ...]:
@@ -215,11 +250,12 @@ def _added(hunk: _Hunk) -> tuple[int, ...]:
 
 
 def _recount(hunk: _Hunk) -> _Hunk:
-    """Keep the `+` start line; only the added-line count changes when we rewrite a hunk."""
+    """Rewrite the header counts to match the (edited) body; start lines are left alone."""
     m = _HUNK_RE.match(hunk.header)
     if not m:
         return hunk
-    return _Hunk(f"{m.group(1)}+{len(_added(hunk))}{m.group(2)}", hunk.lines)
+    old, new = _sides(hunk)
+    return replace(hunk, header=f"@@ -{m.group(1)},{old} +{m.group(2)},{new} @@{m.group(3)}")
 
 
 def _stub(prefix: list[str], hunks: list[_Hunk]) -> str:
@@ -247,7 +283,7 @@ def _stub(prefix: list[str], hunks: list[_Hunk]) -> str:
                     continue
                 break
             lines.append("+" + " " * (indent + 4) + "return None")
-        out.append(_recount(_Hunk(h.header, tuple(lines))))
+        out.append(_recount(replace(h, lines=tuple(lines))))
     return _dump(prefix, out) if replaced else ""
 
 
@@ -266,7 +302,7 @@ def _partial(prefix: list[str], hunks: list[_Hunk]) -> str:
     indent = body[: len(body) - len(body.lstrip())]
     # Preserve syntax: an indented statement becomes a bare return; top-level becomes pass.
     placeholder = f"+{indent}{'return None' if indent else 'pass'}"
-    h = _Hunk(h.header, (*h.lines[:i], placeholder, *h.lines[i + 1 :]))
+    h = replace(h, lines=(*h.lines[:i], placeholder, *h.lines[i + 1 :]))
     return _dump(prefix, [_recount(h)])
 
 
@@ -281,7 +317,7 @@ def _semantics(prefix: list[str], hunks: list[_Hunk]) -> list[tuple[str, str]]:
                     changed = list(h.lines)
                     changed[li] = changed[li].replace(old, new, 1)
                     copy = [*hunks]
-                    copy[hi] = _recount(_Hunk(h.header, tuple(changed)))
+                    copy[hi] = _recount(replace(h, lines=tuple(changed)))
                     out.append((name, _dump(prefix, copy)))
                     break
             else:
@@ -295,7 +331,7 @@ def _semantics(prefix: list[str], hunks: list[_Hunk]) -> list[tuple[str, str]]:
                     changed = list(h.lines)
                     changed[li] = h.lines[li].replace(m.group(2), f"{m.group(2)}_mutant", 1)
                     copy = [*hunks]
-                    copy[hi] = _recount(_Hunk(h.header, tuple(changed)))
+                    copy[hi] = _recount(replace(h, lines=tuple(changed)))
                     out.append(("rename-def", _dump(prefix, copy)))
                     break
             else:
@@ -309,7 +345,7 @@ def _semantics(prefix: list[str], hunks: list[_Hunk]) -> list[tuple[str, str]]:
                     changed = list(h.lines)
                     changed[li] = changed[li].replace(m.group(1), f"{m.group(1)}_mutant", 1)
                     copy = [*hunks]
-                    copy[hi] = _recount(_Hunk(h.header, tuple(changed)))
+                    copy[hi] = _recount(replace(h, lines=tuple(changed)))
                     out.append(("rename-param", _dump(prefix, copy)))
                     break
             else:
