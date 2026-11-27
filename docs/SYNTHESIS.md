@@ -10,6 +10,14 @@ pipeline stage (`DIVERSITY_OK -> BLIND_READER_OK`), the dry-run instruction lint
 mutation probes, the cost ledger with a hard budget breaker / idempotent resume, and the blind
 eval runner with `eval_receipt.json` are in.
 
+## Ideator + critic (#44)
+
+`codekiln ideate RUN_ID --candidates N` asks the writer for N specs per slot and writes
+`ideation.json`. Proposal 0 is the single-writer baseline; the deterministic critic drops any
+spec that fails `validate` / RTM / blind-reader, ignores the slot's planned symbols, duplicates a
+kept task name, or is more than 50% token-overlapping with the baseline or a kept proposal. Only
+the model proposes — admission stays in code, and execution correctness still belongs to Harbor.
+
 ## What consumes what
 
 | Consumer | Reads | From |
