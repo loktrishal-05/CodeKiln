@@ -79,3 +79,13 @@ def test_failed_call_releases_the_hold(tmp_path: Path) -> None:
     with pytest.raises(OSError):
         budget.meter_post(post)("https://x", {}, {})
     assert ledger.held(4) == 0 and ledger.spent(4) == 0
+
+
+def test_missing_usage_is_billed_by_estimate_not_zero(tmp_path: Path) -> None:
+    ledger = BillingLedger(tmp_path / "b.csv", Pricing(0.001, 0.002))
+    budget = Budget(ledger, 3, 1.0, "m")
+    reply = {"choices": [{"message": {"content": "x" * 400}}]}  # provider sent no `usage`
+    payload: dict[str, object] = {"messages": [{"role": "user", "content": "y" * 800}], "max_tokens": 100}
+    budget.meter_post(lambda url, headers, body: reply)("u", {}, payload)
+    assert ledger.spent(3) == pytest.approx((200 * 0.001 + 100 * 0.002) / 1000)  # 800/4 in, 400/4 out
+    assert ledger.held(3) == pytest.approx(0.0)

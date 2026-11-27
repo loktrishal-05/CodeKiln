@@ -105,3 +105,58 @@ def test_cli_probe_writes_dossier_and_fails_on_survivor(
 def test_probe_rejects_non_package(tmp_path: Path) -> None:
     with pytest.raises(ProbeError, match="not a Harbor task"):
         probe_package(tmp_path / "empty", tmp_path / "work", all_killed)
+
+
+BASE_UTILS = """import os
+
+def echo(message, nl=True):
+    if nl:
+        print(message)
+    else:
+        print(message, end="")
+
+def other():
+    return 0
+"""
+NEW_UTILS = """import os
+
+def echo(message, nl=True, upper=False):
+    if upper and nl == True:
+        message = message.upper()
+    if nl:
+        print(message)
+    else:
+        print(message, end="")
+
+def other():
+    return 0
+"""
+
+
+def test_mutants_of_a_realistic_diff_really_apply(tmp_path: Path) -> None:
+    """Context lines and several files: a mutant that does not `git apply` scores 0.0 in Harbor,
+    which would count as killed, so every mutant must be a valid patch."""
+    import subprocess
+
+    def git(*args: str) -> str:
+        r = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.autocrlf=false", *args],
+                           cwd=tmp_path, check=True, capture_output=True, text=True)
+        return r.stdout
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src/utils.py").write_text(BASE_UTILS, newline="")
+    (tmp_path / "CHANGES.md").write_text("# Changes\n\n- old entry\n", newline="")
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    (tmp_path / "src/utils.py").write_text(NEW_UTILS, newline="")
+    (tmp_path / "CHANGES.md").write_text("# Changes\n\n- old entry\n- added upper\n", newline="")
+    ref = git("diff")
+    git("checkout", "-q", "--", ".")
+
+    mutants = build_mutants(ref)
+    assert sum(m.kind == "semantic" for m in mutants) >= 3
+    for m in mutants:
+        patch = tmp_path / "mutant.diff"
+        patch.write_text(m.diff, newline="")
+        git("apply", "--check", str(patch))  # raises CalledProcessError on a corrupt patch
