@@ -17,7 +17,7 @@ from codekiln.planner.models import load_plan
 from codekiln.states import State
 from codekiln.synthesis.emit import write_package
 from codekiln.synthesis.llm_router import RouterError, Writer
-from codekiln.synthesis.models import FeatureSpec, SynthesisError
+from codekiln.synthesis.models import FeatureSpec, SynthesisError, validate
 from codekiln.validation.blind_reader import lint_instruction
 
 MAX_ATTEMPTS = 3
@@ -77,6 +77,7 @@ def synthesize(
                 break
         try:
             spec = writer.write(load_plan(plan_json), repo=repo_url, base_commit=base_commit)
+            validate(spec)  # the task name becomes a path: check it before it is used (and rmtree'd)
         except BudgetExceeded as e:
             out.stopped = f"BUDGET_EXCEEDED: {e}"
             break
@@ -92,6 +93,8 @@ def synthesize(
             continue
 
         dst = packages / spec.task
+        if dst.exists():  # write_task overwrites, so another candidate's package would be lost
+            dst = packages / f"{spec.task}-c{cid}"
         try:
             write_package(dst, spec, repo_url=repo_url, base_commit=base_commit)
         except (PackageError, OSError, ValueError) as e:

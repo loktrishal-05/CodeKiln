@@ -47,6 +47,20 @@ class Usage:
     tokens_out: int = 0
 
     @classmethod
+    def estimated(cls, payload: Mapping[str, object], response: Mapping[str, object]) -> "Usage":
+        """Provider reported no usage: 4 chars ~= 1 token on the prompt and on the completion text."""
+        raw = payload.get("messages", [])
+        messages = raw if isinstance(raw, list) else []
+        tokens_in = sum(len(str(m.get("content", ""))) for m in messages if isinstance(m, Mapping)) // 4
+        text = ""
+        choices = response.get("choices")
+        if isinstance(choices, list) and choices and isinstance(choices[0], Mapping):
+            message = choices[0].get("message")
+            if isinstance(message, Mapping):
+                text = str(message.get("content", ""))
+        return cls(tokens_in, len(text) // 4)
+
+    @classmethod
     def from_response(cls, response: Mapping[str, object]) -> "Usage":
         raw = response.get("usage")
         if not isinstance(raw, Mapping):
@@ -179,6 +193,8 @@ class Budget:
                 self.ledger.release(self.run_id, self.candidate_id, hold, url)
                 raise
             usage = Usage.from_response(response)
+            if not isinstance(response.get("usage"), Mapping):
+                usage = Usage.estimated(payload, response)  # no usage reported: never debit $0
             self.ledger.release(self.run_id, self.candidate_id, hold, url)
             self.ledger.debit(self.run_id, self.candidate_id, usage, self.model, url)
             return response
