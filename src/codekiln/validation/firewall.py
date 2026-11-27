@@ -7,7 +7,14 @@ memory, so the package is flagged. The check is static and offline: the caller s
 checkouts (for click, any later tag cloned into a directory) and nothing is fetched or executed.
 Identifiers are matched structurally (a `def`/`class` of that name, a parameter inside the named
 function's signature), not as bare words, so common names like `echo` do not cause false alarms.
+
+Exact matches reject. Near matches (the same function with a *similarly named* new parameter, or a
+def/class whose name is almost the same, e.g. `upper` for `uppercase`) only warn: a renamed copy of
+an upstream feature is just as contaminated, but a similar name is not proof, so a person decides.
+There is deliberately no model "memorisation probe": it would only re-examine features the exact
+match already rejects, and an equivalent feature under a different name is what near matches catch.
 """
+import difflib
 import json
 import re
 from collections.abc import Iterable, Sequence
@@ -41,11 +48,20 @@ class Hit:
 
 
 @dataclass(frozen=True)
+class Near:
+    marker: str
+    similar_to: str  # the upstream name that looks like it
+    file: str
+    line: int
+
+
+@dataclass(frozen=True)
 class FirewallReport:
     task: str
     markers: tuple[str, ...]
     hits: tuple[Hit, ...]
     corpus: tuple[str, ...]
+    near: tuple[Near, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -57,6 +73,8 @@ class FirewallReport:
                 "task": self.task, "ok": self.ok, "markers": list(self.markers),
                 "corpus": list(self.corpus),
                 "hits": [{"marker": h.marker, "file": h.file, "line": h.line} for h in self.hits],
+                "near": [{"marker": n.marker, "similar_to": n.similar_to, "file": n.file, "line": n.line}
+                         for n in self.near],
             },
             indent=2,
         )
@@ -118,17 +136,52 @@ def _search(marker: Marker, path: Path, text: str) -> list[Hit]:
     return hits
 
 
+_NEAR_NAME = 0.85  # a def/class name this similar to the new one is suspicious
+_NEAR_PARAM = 0.75  # short parameter names need a lower bar (upper / uppercase)
+
+
+def _similar(a: str, b: str, bar: float) -> bool:
+    a, b = a.lower().replace("_", ""), b.lower().replace("_", "")
+    if a == b:
+        return False
+    # a short and a long spelling of one word (upper / uppercase) are prefixes, not high-ratio strings
+    prefix = min(len(a), len(b)) >= 4 and (a.startswith(b) or b.startswith(a))
+    return prefix or difflib.SequenceMatcher(None, a, b).ratio() >= bar
+
+
+def _near(marker: Marker, path: Path, text: str) -> list[Near]:
+    label = marker.label()
+    found: list[Near] = []
+    if path.suffix != ".py":
+        return found
+    if marker.kind == "def":
+        for m in re.finditer(r"\b(?:def|class)\s+(\w+)", text):
+            if _similar(marker.name, m.group(1), _NEAR_NAME):
+                found.append(Near(label, m.group(1), str(path), _line_of(text, m.start())))
+    else:
+        for sig in re.finditer(rf"\bdef\s+{re.escape(marker.owner)}\s*\(([^)]*)\)", text):
+            for param in sorted(_params(sig.group(1))):
+                if _similar(marker.name, param, _NEAR_PARAM):
+                    found.append(Near(label, f"{marker.owner}({param}=...)", str(path),
+                                      _line_of(text, sig.start())))
+    return found
+
+
 def check(package: Path, corpus: Sequence[Path]) -> FirewallReport:
     """Search every later-release file in CORPUS for what PACKAGE's reference diff introduces."""
     diff = (package / "solution" / "reference.diff").read_text(encoding="utf-8")
     found = markers(diff)
     hits: list[Hit] = []
+    near: list[Near] = []
     for path in _files(corpus):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         for marker in found:
-            hits += _search(marker, path, text)
+            exact = _search(marker, path, text)
+            hits += exact
+            if not exact:  # an exact hit already rejects; near matches are for what exact missed
+                near += _near(marker, path, text)
     return FirewallReport(package.name, tuple(m.label() for m in found), tuple(hits),
-                          tuple(str(c) for c in corpus))
+                          tuple(str(c) for c in corpus), tuple(near))

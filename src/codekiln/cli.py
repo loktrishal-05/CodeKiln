@@ -508,6 +508,8 @@ def firewall(
                f" ({len(report.markers)} marker(s), {len(report.hits)} hit(s)) -> {dst}")
     for hit in report.hits[:10]:
         typer.echo(f"  {hit.marker} already in {hit.file}:{hit.line}", err=True)
+    for n in report.near[:10]:  # warnings only: a similar name is not proof, a person decides
+        typer.echo(f"  NEAR {n.marker} looks like {n.similar_to} in {n.file}:{n.line}", err=True)
     if not report.ok:
         raise typer.Exit(1)
 
