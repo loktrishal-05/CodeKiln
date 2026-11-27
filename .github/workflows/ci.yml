@@ -4,6 +4,13 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -15,9 +22,31 @@ jobs:
           cache: pip
       - name: Size guard (no tracked file over 1 MB)
         run: |
-          big=$(git ls-files -z | xargs -0 du -k | awk '$1 > 1024 {print $2}')
+          big=$(git ls-files -z | xargs -0 -r du -k | awk '$1 > 1024 {print $2}')
           if [ -n "$big" ]; then echo "Files over 1 MB:"; echo "$big"; exit 1; fi
+      - name: Secret & env guard (no tracked .env, keys, or DBs)
+        run: |
+          forbidden=$(git ls-files | grep -E '(^|/)\.env($|\..*)|\.pem$|\.key$|\.sqlite($|-)|\.db$' | grep -vE '^\.env\.example$' || true)
+          if [ -n "$forbidden" ]; then echo "Forbidden tracked files:"; echo "$forbidden"; exit 1; fi
+      - name: Shell script check
+        run: |
+          test -x scripts/demo_run.sh
+          bash -n scripts/demo_run.sh
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: mypy
       - run: pytest
+
+  docker-smoke:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build factory Docker image
+        run: docker build -t codekiln-factory:ci .
+      - name: Verify CLI help, non-root user, and clean env
+        run: |
+          docker run --rm codekiln-factory:ci --help >/dev/null
+          uid=$(docker run --rm --entrypoint id codekiln-factory:ci -u)
+          test "$uid" != "0"
+          ! docker run --rm --entrypoint env codekiln-factory:ci | grep -qE '^(ANTHROPIC_API_KEY|OPENAI_API_KEY|CODEKILN_LLM_API_KEY)=.'
