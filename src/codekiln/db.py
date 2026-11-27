@@ -1,4 +1,4 @@
-"""SQLite WAL ledger: five tables giving lineage from commit SHA to eval result."""
+"""SQLite WAL ledger: six tables giving lineage from commit SHA to eval result."""
 import hashlib
 import sqlite3
 
@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS task_candidates (
   id INTEGER PRIMARY KEY, run_id INTEGER REFERENCES factory_runs(id),
   idempotency_key TEXT UNIQUE NOT NULL, category TEXT, difficulty TEXT, ast_fingerprint TEXT,
   status TEXT NOT NULL, rejection_reason TEXT, package_sha256 TEXT);
+CREATE TABLE IF NOT EXISTS task_plans (
+  candidate_id INTEGER PRIMARY KEY REFERENCES task_candidates(id),
+  plan_json TEXT NOT NULL, attempts INTEGER DEFAULT 0, spec_sha256 TEXT, last_error TEXT,
+  updated_at TEXT);
 CREATE TABLE IF NOT EXISTS validation_executions (
   id INTEGER PRIMARY KEY, candidate_id INTEGER REFERENCES task_candidates(id),
   phase TEXT NOT NULL, run_index INTEGER, exit_code INTEGER, f2p_passed INTEGER,
