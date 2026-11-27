@@ -2,6 +2,7 @@
 
 Level comes from AST fan-out: files touched, directories spanned, dependents affected.
 """
+from collections.abc import Mapping
 from itertools import zip_longest
 from pathlib import Path
 
@@ -19,9 +20,17 @@ def level(plan: Plan) -> str:
     return "L1"
 
 
-def balance(plans: list[Plan], slots: int, mix: tuple[int, int, int] = (1, 1, 1)) -> list[Plan]:
-    """Pick up to SLOTS plans following the L1:L2:L3 MIX; unfilled levels are topped up from the rest."""
-    by_level = {lv: [p for p in plans if level(p) == lv] for lv in LEVELS}
+def balance(
+    plans: list[Plan], slots: int, mix: tuple[int, int, int] = (1, 1, 1),
+    remap: Mapping[str, str] | None = None,
+) -> list[Plan]:
+    """Pick up to SLOTS plans following the L1:L2:L3 MIX; unfilled levels are topped up from the rest.
+
+    REMAP (from `codekiln calibrate`) re-labels heuristic levels by what real eval results showed
+    those tasks to be, so the mix is over measured difficulty once there is evidence for it.
+    """
+    effective = remap or {}
+    by_level = {lv: [p for p in plans if effective.get(level(p), level(p)) == lv] for lv in LEVELS}
     total = sum(mix)
     want = {lv: slots * m // total for lv, m in zip(LEVELS, mix, strict=True)}
     for lv in LEVELS[: slots - sum(want.values())]:  # remainder goes to the lowest levels
