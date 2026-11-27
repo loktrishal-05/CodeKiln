@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS task_candidates (
 CREATE TABLE IF NOT EXISTS task_plans (
   candidate_id INTEGER PRIMARY KEY REFERENCES task_candidates(id),
   plan_json TEXT NOT NULL, attempts INTEGER DEFAULT 0, spec_sha256 TEXT, last_error TEXT,
-  updated_at TEXT);
+  updated_at TEXT, package_path TEXT);
 CREATE TABLE IF NOT EXISTS validation_executions (
   id INTEGER PRIMARY KEY, candidate_id INTEGER REFERENCES task_candidates(id),
   phase TEXT NOT NULL, run_index INTEGER, exit_code INTEGER, f2p_passed INTEGER,
@@ -36,4 +36,7 @@ def connect(path: str) -> sqlite3.Connection:
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA foreign_keys=ON")
     con.executescript(SCHEMA)
+    # `connect` is also called on ledgers made before a new column existed.
+    if "package_path" not in {row[1] for row in con.execute("PRAGMA table_info(task_plans)")}:
+        con.execute("ALTER TABLE task_plans ADD COLUMN package_path TEXT")
     return con

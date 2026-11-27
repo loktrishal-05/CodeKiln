@@ -3,7 +3,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from spec_examples import make_spec
+from spec_examples import INSTRUCTION, make_spec
 from typer.testing import CliRunner
 
 from codekiln.cli import app
@@ -98,7 +98,7 @@ def test_synth_writes_packages_and_marks_synthesized(
     assert res.exit_code == 0, res.output
     assert "synthesized" in res.output
     statuses = rows(tmp_path, "SELECT status FROM task_candidates WHERE run_id = " + str(run_id))
-    assert statuses and {s for (s,) in statuses} == {"SYNTHESIZED"}
+    assert statuses and {s for (s,) in statuses} == {"BLIND_READER_OK"}
     assert rows(tmp_path, "SELECT COUNT(*) FROM task_plans WHERE spec_sha256 IS NOT NULL")[0][0] > 0
     for d in (tmp_path / "pkg").iterdir():
         assert (d / "task.toml").exists() and (d / "rtm_map.json").exists()
@@ -110,6 +110,24 @@ def test_synth_is_idempotent(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
     assert invoke(monkeypatch, tmp_path, "synth", str(run_id)).exit_code == 0
     again = invoke(monkeypatch, tmp_path, "synth", str(run_id))
     assert again.exit_code == 0 and "0 synthesized" in again.output and "skipped" in again.output
+
+
+def test_blind_reader_rejects_a_leaky_instruction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    run_id = run_and_id(monkeypatch, tmp_path)
+    leaked = INSTRUCTION + "\nThe hidden tests live in tests/feature/.\n"
+
+    def write(self: LLMWriter, plan: Plan, *, repo: str, base_commit: str):
+        return make_spec(instruction=leaked)
+
+    monkeypatch.setattr(LLMWriter, "write", write)
+    res = invoke(monkeypatch, tmp_path, "synth", str(run_id), "--packages", str(tmp_path / "pkg"))
+    assert res.exit_code == 1 and "BLIND_READER" in res.output
+    statuses = rows(tmp_path, "SELECT status, rejection_reason FROM task_candidates")
+    assert {s for s, _ in statuses} == {"REJECTED"}
+    assert all("BLIND_READER" in (reason or "") for _, reason in statuses)
+    assert not list((tmp_path / "pkg").iterdir())
 
 
 def test_synth_dead_letters_after_three_attempts(

@@ -20,7 +20,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - [ ] **[C]** Harbor runner: `harbor run -a nop|oracle` wrapper -> reward + per-test CTRF from `verifier/` -> feeds the gate's `Runner`; [x] **[L]** CTRF/JUnit parsers
 - [x] **[L]** Planner: reverse extract + forward synth + AST diversity guard
 - [x] **[L]** Planner: reverse mode becomes locate-only (no stripping); seeds target click subsystems (types, parser/options, formatting/help, shell completion, testing/CliRunner, termui)
-- [ ] **[S]** Synthesizer: instruction.md, reference diff, F2P tests, RTM coverage gate (emits the Harbor layout in SPEC -> Task package)
+- [x] **[S]** Synthesizer: instruction.md, reference diff, F2P tests, RTM coverage gate (emits the Harbor layout in SPEC -> Task package)
 - [x] **[L]** 3-state x3 gate + flakiness quarantine
 - [ ] **[S]** 4-class mutation probes (>=80% kill), each probe = a Harbor trial with a swapped `solution/`
 - [ ] **[C]** Scrubber + Harbor packager (`tests/test.sh` with the official reward formula, `fail_to_pass.json`/`pass_to_pass.json`, `network_mode="no-network"`, separate verifier) + generation receipt + manifest + `security_audit.json`
@@ -37,7 +37,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - ~~**[C]** Node/TypeScript adapter~~ cut: rules allow one repo
 - [x] **[L]** Mergeability & blast-radius grader
 - [x] **[L]** L1/L2/L3 difficulty dial
-- [ ] **[S]** Dry-run blind reader linter
+- [x] **[S]** Dry-run blind reader linter
 - [ ] **[H]** Static HTML replay viewer + rejected-candidates graveyard
 - ~~**[H]** Cross-repo portability matrix~~ replaced by the cross-task oracle matrix (Wave 1)
 - [ ] **[S]** Blind eval runner + `eval_receipt.json`; **[H]** leaderboard view (2+ frontier models)

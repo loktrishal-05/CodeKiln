@@ -17,6 +17,7 @@ from codekiln.states import State
 from codekiln.synthesis.emit import write_package
 from codekiln.synthesis.llm_router import RouterError, Writer
 from codekiln.synthesis.models import FeatureSpec, SynthesisError
+from codekiln.validation.blind_reader import lint_instruction
 
 MAX_ATTEMPTS = 3
 
@@ -63,25 +64,35 @@ def synthesize(
             _reject(con, cid, "no persisted plan; re-run `codekiln run` on this repo")
             out.rejected += 1
             continue
-        dst: Path | None = None
         try:
             spec = writer.write(load_plan(plan_json), repo=repo_url, base_commit=base_commit)
-            dst = packages / spec.task
-            write_package(dst, spec, repo_url=repo_url, base_commit=base_commit)
-        except (SynthesisError, RouterError, PackageError, OSError, ValueError) as e:
-            if dst is not None:
-                shutil.rmtree(dst, ignore_errors=True)
-            out.failed += 1
-            out.rejected += _record_failure(con, cid, attempts + 1, f"{type(e).__name__}: {e}", max_attempts)
+        except (SynthesisError, RouterError, OSError, ValueError) as e:
+            _fail(con, out, cid, attempts, e, max_attempts)
             continue
+
+        # The blind reader judges only what the agent will see, before any file is written.
+        report = lint_instruction(spec.instruction)
+        if not report.ok:
+            _reject(con, cid, "BLIND_READER: " + "; ".join(report.problems))
+            out.rejected += 1
+            continue
+
+        dst = packages / spec.task
+        try:
+            write_package(dst, spec, repo_url=repo_url, base_commit=base_commit)
+        except (PackageError, OSError, ValueError) as e:
+            shutil.rmtree(dst, ignore_errors=True)
+            _fail(con, out, cid, attempts, e, max_attempts)
+            continue
+
         con.execute(
             "UPDATE task_candidates SET status = ?, rejection_reason = NULL WHERE id = ?",
-            (State.SYNTHESIZED.value, cid),
+            (State.BLIND_READER_OK.value, cid),
         )
         con.execute(
-            "UPDATE task_plans SET spec_sha256 = ?, last_error = NULL, updated_at = datetime('now')"
-            " WHERE candidate_id = ?",
-            (spec_hash(spec), cid),
+            "UPDATE task_plans SET spec_sha256 = ?, package_path = ?, last_error = NULL,"
+            " updated_at = datetime('now') WHERE candidate_id = ?",
+            (spec_hash(spec), str(dst), cid),
         )
         con.commit()
         out.synthesized += 1
@@ -93,6 +104,19 @@ def spec_hash(spec: FeatureSpec) -> str:
     """Stable identity of a proposal; used for idempotency and the ledger."""
     blob = json.dumps(spec.to_dict(), sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(blob).hexdigest()
+
+
+def _fail(
+    con: sqlite3.Connection,
+    summary: SynthSummary,
+    candidate_id: int,
+    attempts: int,
+    error: Exception,
+    max_attempts: int,
+) -> None:
+    summary.failed += 1
+    message = f"{type(error).__name__}: {error}"
+    summary.rejected += _record_failure(con, candidate_id, attempts + 1, message, max_attempts)
 
 
 def _record_failure(

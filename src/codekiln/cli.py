@@ -79,9 +79,30 @@ def synth(
         f"run {run_id}: {s.synthesized} synthesized, {s.failed} retryable,"
         f" {s.rejected} rejected, {s.skipped} skipped"
     )
+    for (reason,) in con.execute(
+        "SELECT rejection_reason FROM task_candidates WHERE run_id = ? AND rejection_reason IS NOT NULL"
+        " ORDER BY id",
+        (run_id,),
+    ):
+        typer.echo(f"  reject: {reason}", err=True)
     for p in s.packages:
         typer.echo(f"  {p}")
     if s.synthesized == 0 and (s.failed or s.rejected):
+        raise typer.Exit(1)
+
+
+@app.command(name="blind-read")
+def blind_read(package: Path, out: Path | None = None) -> None:
+    """Dry-run the blind reader on PACKAGE's agent-visible instruction."""
+    from codekiln.validation.blind_reader import lint_package
+
+    report = lint_package(package)
+    dst = out or package / "blind_reader.json"
+    dst.write_text(report.to_json(), encoding="utf-8")
+    typer.echo(f"{package.name}: {'BLIND_READER_OK' if report.ok else 'rejected'} -> {dst}")
+    if not report.ok:
+        for p in report.problems:
+            typer.echo(f"  {p}", err=True)
         raise typer.Exit(1)
 
 
