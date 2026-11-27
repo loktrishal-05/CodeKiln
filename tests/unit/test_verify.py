@@ -63,7 +63,7 @@ def test_verify_passes_and_records_every_trial(tmp_path: Path) -> None:
     result = verify_package(task, tmp_path / "work", db=db, run=fake_run())
     assert result.ok and result.state is State.STATE_C_ALL_PASS
     assert result.p2p == ("t::old",) and result.trials == 7
-    assert json.loads((tmp_path / "work" / "flakiness_quarantine.json").read_text()) == {
+    assert json.loads((tmp_path / "work" / "task" / "flakiness_quarantine.json").read_text()) == {
         "quarantined": [],
     }
     con = sqlite3.connect(db)
@@ -121,7 +121,7 @@ def test_crashed_trials_are_recorded_and_reject(tmp_path: Path) -> None:
     result = verify_package(task, tmp_path / "work", run=fake_run(crash=True))
     assert result.state is State.REJECTED and "STATE_A" in result.reason
     assert result.trials == 1  # the gate stops at A
-    assert json.loads((tmp_path / "work" / "flakiness_quarantine.json").read_text()) == {
+    assert json.loads((tmp_path / "work" / "task" / "flakiness_quarantine.json").read_text()) == {
         "quarantined": [],
     }
 
@@ -166,3 +166,31 @@ def test_cli_verify_records_verdict_and_exits_by_result(
     bad = CliRunner().invoke(app, ["verify", str(task), "--work", str(work), "--db", str(db2)])
     assert bad.exit_code == 1, bad.output
     assert "STATE_C: reference patch fails" in bad.output
+
+
+def test_passing_gate_writes_the_verified_p2p_into_an_unsealed_package(tmp_path: Path) -> None:
+    task = make_task(tmp_path)
+    (task / "tests" / "pass_to_pass.json").write_text("[]")  # what the emitter ships
+    assert verify_package(task, tmp_path / "work", run=fake_run()).ok
+    assert json.loads((task / "tests" / "pass_to_pass.json").read_text()) == ["t::old"]
+
+
+def test_p2p_is_left_alone_when_sealed_or_when_the_gate_fails(tmp_path: Path) -> None:
+    sealed = make_task(tmp_path / "a")
+    (sealed / "tests" / "pass_to_pass.json").write_text("[]")
+    (sealed / "manifest.sha256").write_text("sealed")
+    assert verify_package(sealed, tmp_path / "work", run=fake_run()).ok
+    assert (sealed / "tests" / "pass_to_pass.json").read_text() == "[]"
+    failing = make_task(tmp_path / "b")
+    (failing / "tests" / "pass_to_pass.json").write_text("[]")
+    assert not verify_package(failing, tmp_path / "work", run=fake_run("failed")).ok
+    assert (failing / "tests" / "pass_to_pass.json").read_text() == "[]"
+
+
+def test_quarantine_file_is_kept_per_task(tmp_path: Path) -> None:
+    one = make_task(tmp_path / "one")
+    two = make_task(tmp_path / "two").rename(tmp_path / "two" / "other-task")
+    verify_package(one, tmp_path / "work", run=fake_run())
+    verify_package(two, tmp_path / "work", run=fake_run())
+    assert (tmp_path / "work" / "task" / "flakiness_quarantine.json").is_file()
+    assert (tmp_path / "work" / "other-task" / "flakiness_quarantine.json").is_file()

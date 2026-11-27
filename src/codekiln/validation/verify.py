@@ -91,9 +91,13 @@ def verify_package(
     session = Path(tempfile.mkdtemp(prefix="verify-", dir=work))
     gate = gate_runner(task, session, run=run or harbor_runner.run, record=record)
     verdict = run_gate(gate, f2p, runs)
-    qpath = quarantine or work / "flakiness_quarantine.json"
+    qpath = quarantine or work / task.resolve().name / "flakiness_quarantine.json"  # one per task
     qpath.parent.mkdir(parents=True, exist_ok=True)
     write_quarantine(qpath, verdict)
+    if verdict.state is State.STATE_C_ALL_PASS and not (task / "manifest.sha256").exists():
+        # The emitter ships an empty pass_to_pass.json; the reward formula only guards regressions
+        # once the gate's verified P2P set is in it. A sealed package keeps its manifest intact.
+        (task / "tests" / "pass_to_pass.json").write_text(json.dumps(sorted(verdict.p2p), indent=1))
 
     if db is not None and db.exists():
         with sqlite3.connect(db) as con:
