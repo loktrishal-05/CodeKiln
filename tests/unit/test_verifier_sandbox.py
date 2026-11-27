@@ -155,3 +155,21 @@ def test_extract_agent_diff_and_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert res.exit_code == 0, res.output
     data = json.loads(out.read_text(encoding="utf-8"))
     assert data["ok"] is True and data["container_isolated"] is True
+
+
+def test_docker_output_is_decoded_as_utf8_not_the_platform_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`text=True` decodes with the platform default (cp1252 on Windows), so any non-ASCII byte in a
+    test's output would crash the verifier there; the decoding must be explicit and forgiving."""
+    import subprocess
+
+    from codekiln.validation import verifier_sandbox
+
+    seen: dict[str, object] = {}
+
+    def fake_run(cmd, **kw):  # type: ignore[no-untyped-def]
+        seen.update(kw)
+        return subprocess.CompletedProcess(cmd, 0, "ok", "")
+
+    monkeypatch.setattr(verifier_sandbox.subprocess, "run", fake_run)
+    verifier_sandbox._run_docker(["version"], 5)
+    assert seen["encoding"] == "utf-8" and seen["errors"] == "replace" and "text" not in seen

@@ -68,7 +68,8 @@ def _run_docker(args: list[str], timeout_s: int | None = None) -> subprocess.Com
         return subprocess.run(
             ["docker", *args],
             capture_output=True,
-            text=True,
+            encoding="utf-8",  # not text=True: that decodes with the platform default (cp1252 on Windows)
+            errors="replace",  # and test output may hold any byte
             check=False,
             timeout=timeout_s,
         )
