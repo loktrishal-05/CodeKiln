@@ -606,6 +606,90 @@ def probe(
         raise typer.Exit(1)
 
 
+@app.command(name="red-team")
+def red_team(
+    package: Path,
+    work: Path = Path("runs/red_team"),
+    out: Path | None = None,
+    extra: int = typer.Option(0, min=0),
+    run_id: int | None = None,
+    ledger_csv: Path | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+) -> None:
+    """Run red-team cheat attacks on PACKAGE in Harbor; block if any cheat scores."""
+    from codekiln.billing.ledger import BillingLedger, Budget, BudgetExceeded, Pricing
+    from codekiln.synthesis.llm_router import ModelConfig, RouterError, http_post
+    from codekiln.validation.red_team import (
+        Attack,
+        LLMCheatWriter,
+        RedTeamError,
+        propose_cheats,
+        red_team_package,
+        write_red_team_report,
+    )
+    from codekiln.validation.verify import find_candidate
+
+    settings = Settings()
+    extra_attacks: tuple[Attack, ...] = ()
+    if extra:
+        if run_id is None:
+            typer.echo("--run-id is required when --extra is used (for metering)", err=True)
+            raise typer.Exit(2)
+        db = Path(settings.db_path)
+        if not db.exists():
+            typer.echo(f"No ledger at {db}. Run `codekiln run <repo>` first.", err=True)
+            raise typer.Exit(2)
+        try:
+            config = ModelConfig(
+                base_url=base_url or settings.llm_base_url,
+                api_key=settings.llm_api_key,
+                model=model or settings.llm_model,
+            )
+        except RouterError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(2) from e
+        pricing = Pricing(settings.llm_input_usd_per_1k, settings.llm_output_usd_per_1k)
+        bills = BillingLedger(ledger_csv or Path(settings.billing_ledger), pricing)
+        budget = Budget(bills, run_id, settings.max_budget_usd, config.model, pricing)
+        con = connect(str(db))
+        try:
+            budget.start_candidate(find_candidate(con, package) or 0)
+        finally:
+            con.close()
+        writer = LLMCheatWriter(config, post=budget.meter_post(http_post))
+        try:
+            budget.guard()
+            extra_attacks, rejected = propose_cheats(
+                (package / "instruction.md").read_text(encoding="utf-8"), writer, n=extra
+            )
+        except BudgetExceeded as e:
+            typer.echo(f"stopped: BUDGET_EXCEEDED: {e}", err=True)
+            raise typer.Exit(1) from e
+        except (RedTeamError, RouterError, OSError) as e:
+            typer.echo(f"red-team proposal failed: {e}", err=True)
+            raise typer.Exit(2) from e
+        for reason in rejected:
+            typer.echo(f"  skipped cheat: {reason}", err=True)
+
+    try:
+        report_obj = red_team_package(package, work, extra_attacks=extra_attacks)
+    except (RedTeamError, OSError, ValueError) as e:
+        typer.echo(f"red-team failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    dst = write_red_team_report(out or package / "red_team_report.json", report_obj)
+    typer.echo(
+        f"{package.name}: {'OK (all cheats blocked)' if report_obj.ok else 'BLOCKED'}"
+        f" ({len(report_obj.attacks)} attacks) -> {dst}"
+    )
+    for atk in report_obj.attacks:
+        typer.echo(f"  {atk.name:>20} {'SCORED' if atk.scored else 'blocked'} reward={atk.reward}")
+    if not report_obj.ok:
+        for reason in report_obj.reasons:
+            typer.echo(f"  FAIL: {reason}", err=True)
+        raise typer.Exit(1)
+
+
 @app.command()
 def scrub(task: Path, out: Path | None = None) -> None:
     """Audit a staged Harbor task against the anti-gaming policy (writes security_audit.json)."""
