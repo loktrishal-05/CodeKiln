@@ -21,8 +21,8 @@ def _todo(name: str) -> None:
 @app.command()
 def run(
     repo: str,
-    slots: int = typer.Option(5, min=1),
-    max_budget_usd: float = 5.0,  # unused until synthesis spends money
+    slots: int = typer.Option(6, min=1),  # the six click planner subsystems
+    max_budget_usd: float = 5.0,
     workdir: Path = Path("workspaces"),
 ) -> None:
     """Plan task candidates from REPO (git URL, directory or zip) and record them in the ledger.
