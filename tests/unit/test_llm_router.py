@@ -119,3 +119,23 @@ def test_http_post_wraps_non_json_bodies(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_model_config_repr_hides_the_key() -> None:
     assert "sk-test" not in repr(CONFIG)
+
+
+def test_http_post_sends_an_explicit_user_agent_and_keeps_the_callers_headers(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+
+    from codekiln.synthesis import llm_router
+
+    seen: dict[str, str] = {}
+
+    def fake_urlopen(req, timeout):  # type: ignore[no-untyped-def]
+        seen.update({k.lower(): v for k, v in req.header_items()})
+        return io.BytesIO(b'{"choices": []}')
+
+    monkeypatch.setattr(llm_router.urllib.request, "urlopen", fake_urlopen)
+    llm_router.http_post("https://p.invalid/v1/chat/completions", {"Authorization": "Bearer x"}, {})
+    assert seen["user-agent"] == llm_router.USER_AGENT and "python-urllib" not in seen["user-agent"].lower()
+    assert seen["authorization"] == "Bearer x"  # the caller's headers are untouched
+    seen.clear()
+    llm_router.http_post("https://p.invalid/x", {"User-Agent": "mine/1"}, {})
+    assert seen["user-agent"] == "mine/1"  # an explicit caller choice wins

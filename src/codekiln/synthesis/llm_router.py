@@ -26,6 +26,9 @@ base commit, and no upstream behaviour may be removed to make room for it.
 """
 
 
+USER_AGENT = "codekiln/0.1 (+https://github.com/loktrishal-05/CodeKiln)"
+
+
 class RouterError(RuntimeError):
     """Transport or provider failure (missing key, HTTP error, malformed response)."""
 
@@ -125,9 +128,14 @@ class LLMWriter:
 
 
 def http_post(url: str, headers: dict[str, str], payload: dict[str, object]) -> Mapping[str, object]:
-    """Stdlib POST so the factory gains no SDK dependency; 120 s covers slow completions."""
+    """Stdlib POST so the factory gains no SDK dependency; 120 s covers slow completions.
+
+    Sends an explicit User-Agent: urllib's default (`Python-urllib/x.y`) is rejected with a 403
+    (Cloudflare error 1010) by providers such as Groq, found on the first real run.
+    """
     req = urllib.request.Request(
-        url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
+        url, data=json.dumps(payload).encode("utf-8"),
+        headers={"User-Agent": USER_AGENT, **headers}, method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=120) as resp:
