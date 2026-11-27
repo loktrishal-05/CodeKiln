@@ -16,7 +16,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - [x] Repo scaffold, state machine, SQLite schema, CLI skeleton
 - [x] **[L]** Ingestion: repo loader (URL/dir/zip), commit pin, hooks disabled, zip-slip guard
 - [x] **[C]** Profiler + cached env image per (repo, commit), ARM64/x86
-- [ ] **[C]** Harbor `environment/Dockerfile` template for click @ base_commit (all existing tests pass in-image)
+- [x] **[C]** Harbor `environment/Dockerfile` template for click @ base_commit (all existing tests pass in-image) (`packaging/harbor.py`, by [H])
 - [ ] **[C]** Harbor runner: `harbor run -a nop|oracle` wrapper -> reward + per-test CTRF from `verifier/` -> feeds the gate's `Runner`; [x] **[L]** CTRF/JUnit parsers
 - [x] **[L]** Planner: reverse extract + forward synth + AST diversity guard
 - [ ] **[L]** Planner: reverse mode becomes locate-only (no stripping); seeds target click subsystems (types, parser/options, formatting/help, shell completion, testing/CliRunner, termui)
