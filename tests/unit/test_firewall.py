@@ -83,3 +83,34 @@ def test_the_factory_rejects_a_contaminated_candidate_before_spending_probe_time
     out, _, _ = drive(tmp_path / "run", corpus=[corpus])
     assert not out.packaged and len(out.rejected) == 3
     assert all(r.startswith("firewall: already in a later release") for r in out.rejected.values())
+
+
+def test_a_renamed_parameter_upstream_is_a_near_match_not_a_rejection(tmp_path: Path) -> None:
+    corpus = later_release(tmp_path / "later", "def echo(message=None, nl=True, upper=False):\n    pass\n")
+    report = check(package(tmp_path), [corpus])  # ours adds `uppercase`; upstream spells it `upper`
+    assert report.ok and report.hits == ()  # only a warning: a similar name is not proof
+    assert [(n.marker, n.similar_to) for n in report.near] == [("echo(uppercase=...)", "echo(upper=...)")]
+
+
+def test_a_renamed_function_or_class_is_a_near_match(tmp_path: Path) -> None:
+    corpus = later_release(tmp_path / "later", "def reversed_text(v):\n    pass\nclass TextFlipperBase:\n    pass\n")
+    report = check(package(tmp_path, NEW_FUNC), [corpus])
+    assert report.ok
+    assert {(n.marker, n.similar_to) for n in report.near} == {
+        ("reverse_text", "reversed_text"), ("TextFlipper", "TextFlipperBase")}
+
+
+def test_unrelated_names_and_exact_hits_do_not_add_near_noise(tmp_path: Path) -> None:
+    unrelated = later_release(tmp_path / "a", "def echo(message=None, color=None, err=False):\n    pass\n")
+    assert check(package(tmp_path), [unrelated]).near == ()
+    exact = later_release(tmp_path / "b", "def echo(m, uppercase=False, upper=False):\n    pass\n")
+    report = check(package(tmp_path), [exact])
+    assert not report.ok and report.near == ()  # an exact hit already rejects; no double reporting
+
+
+def test_cli_prints_near_matches_as_warnings_and_still_exits_zero(tmp_path: Path) -> None:
+    task = package(tmp_path)
+    corpus = later_release(tmp_path / "later", "def echo(m, upper=False):\n    pass\n")
+    res = CliRunner().invoke(app, ["firewall", str(task), "--corpus", str(corpus)])
+    assert res.exit_code == 0 and "clear" in res.output and "NEAR echo(uppercase=...)" in res.output
+    assert json.loads((task / "firewall.json").read_text())["near"][0]["similar_to"] == "echo(upper=...)"
