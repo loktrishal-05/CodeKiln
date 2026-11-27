@@ -41,6 +41,10 @@ def _fmt(r: float | None) -> str:
     return "crash" if r is None else f"{r:.2f}"
 
 
+def _mapping(value: object) -> dict[str, Any]:
+    return {str(k): v for k, v in value.items()} if isinstance(value, dict) else {}
+
+
 def _rows(con: sqlite3.Connection, sql: str, *args: object) -> list[dict[str, Any]]:
     con.row_factory = sqlite3.Row
     return [dict(r) for r in con.execute(sql, args)]
@@ -113,8 +117,19 @@ def _package(d: Path) -> dict[str, Any]:
 
     receipt_p = d / "generation_receipt.json"
     receipt = json.loads(receipt_p.read_text()) if receipt_p.exists() else {}
+    dossier_p = d / "mutation_dossier.json"
+    dossier = json.loads(dossier_p.read_text()) if dossier_p.exists() else {}
+    gates = _mapping(receipt.get("gates"))
+    # The packager does not emit gate rewards; read them from nested gates, and fall back to the
+    # mutation dossier for the kill rate. Top-level keys win for older receipts.
+    metrics = {
+        "mutation_kill_rate": receipt.get("mutation_kill_rate", dossier.get("semantic_kill_rate")),
+        "nop_rewards": receipt.get("nop_rewards", gates.get("nop_rewards")),
+        "oracle_rewards": receipt.get("oracle_rewards", gates.get("oracle_rewards")),
+    }
     return {"name": d.name, "title": title, "instruction": instr, "meta": meta,
-            "f2p": count("fail_to_pass.json"), "p2p": count("pass_to_pass.json"), "receipt": receipt}
+            "f2p": count("fail_to_pass.json"), "p2p": count("pass_to_pass.json"),
+            "receipt": receipt, "metrics": metrics}
 
 
 def _rewards(rs: list[float | None] | None, want: float) -> str:
@@ -131,15 +146,15 @@ def _packages(root: Path | None) -> str:
         return _empty("No packaged tasks found.", "codekiln run <repo>")
     rows = ""
     for p in map(_package, dirs):
-        r, meta = p["receipt"], p["meta"]
-        kill = r.get("mutation_kill_rate")
+        meta, m = p["meta"], p["metrics"]
+        kill = m["mutation_kill_rate"]
         rows += (
             f'<tr><td><details><summary>{_e(p["title"])}</summary><pre>{_e(p["instruction"])}</pre>'
             f'<p class="path"><code>{_e(p["name"])}/</code></p></details></td>'
             f'<td>{_e(meta.get("category", "-"))}</td><td>{_e(meta.get("difficulty", "-"))}</td>'
             f'<td class="n">{_e(p["f2p"] if p["f2p"] is not None else "-")}</td>'
             f'<td class="n">{_e(p["p2p"] if p["p2p"] is not None else "-")}</td>'
-            f'{_rewards(r.get("nop_rewards"), 0.0)}{_rewards(r.get("oracle_rewards"), 1.0)}'
+            f'{_rewards(m["nop_rewards"], 0.0)}{_rewards(m["oracle_rewards"], 1.0)}'
             f'<td class="n">{"-" if kill is None else f"{100 * kill:.0f}%"}</td></tr>'
         )
     return ('<div class="scroll"><table class="tasks"><thead><tr><th scope="col">Task</th>'

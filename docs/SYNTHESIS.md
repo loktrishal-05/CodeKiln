@@ -132,11 +132,12 @@ model x task solve matrix and tasks every model solved or none solved. Rows are 
 
 ## Team asks
 
+Posted as [issue #31](https://github.com/loktrishal-05/CodeKiln/issues/31) (originally asked in #22):
+
 - **Cholan:** is `rtm_map.json` at the task root OK for the packager's manifest, or should it live
-  under `tests/`? I default to root so `tests/` stays exactly the grading surface.
-- **Harsha:** the three JSON schemas are `rtm_map.json` (here), `mutation_dossier.json` and
-  `eval_receipt.json` (next two PRs). Tell me the fields the dashboard needs beyond
-  `mutation_kill_rate`, `nop_rewards`, `oracle_rewards`, `model_id`, `resolved`.
-- **Loktrishal:** planner output is enough — no change requested. If you want per-slot prompts
-  reproducible, I can persist the `Plan` (files/symbols/fanout) on `task_candidates`; today only
-  category/difficulty/fingerprint are stored.
+  under `tests/`? Default is root so `tests/` stays exactly the grading surface.
+- **Harsha:** confirm the fields the dashboard needs beyond `mutation_kill_rate`, `nop_rewards`,
+  `oracle_rewards`, `model_id`, `resolved`. Issue #31 lists the exact schemas emitted today. The
+  report now reads the kill rate from `mutation_dossier.json` and rewards from
+  `generation_receipt.gates` when the receipt has no top-level keys.
+- **Loktrishal:** resolved — planner output is enough; plans are persisted on `task_plans.plan_json`.

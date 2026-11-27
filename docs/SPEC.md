@@ -63,7 +63,7 @@ Code: `src/codekiln/states.py`.
 | FR-001-004 | Ingestion & env | Git URL / dir / zip; record `base_commit`; disable git hooks; detect stack + test runner; one cached Docker base image per (repo, commit) |
 | FR-005-007 | Discovery & diversity | Reverse extraction (coverage + dependency graph BFS) **locates** where features live; forward synthesis proposes **new** features there (5 categories: Core Logic, API/CLI, Validation, Persistence, Cross-Module); dedupe by AST/file overlap, Jaccard < 0.4. Never delete upstream code to create a task |
 | FR-008-010 | Contract-first synthesis | `instruction.md` with explicit signatures/errors; reference diff; F2P tests + P2P manifest; spec-test interface linter |
-| FR-011-016 | Execution & mutation | Runner = `harbor run` (nop for A/B, oracle for C) and CTRF read back from the trial's `verifier/` dir; State A/B/C (x3 for flakiness); 4-class probes: No-Op, Hardcoded Stub, Partial-Impl, 3-5 semantic mutants (>=80% killed), each run as a Harbor trial with a swapped `solution/` |
+| FR-011-016 | Execution & mutation | Runner = `harbor run --no-delete` (nop for A/B, oracle for C) and per-test statuses read back from the trial's `verifier/results.json` (CTRF-shaped `{node_id: status}`); State A/B/C (x3 for flakiness), with State A derived from nop results minus F2P nodes because `test.sh` always installs feature tests; 4-class probes: No-Op, Hardcoded Stub, Partial-Impl, 3-5 semantic mutants (>=80% killed), each run as a Harbor trial with a swapped `solution/` |
 | FR-017-027 | Packaging, eval, ops | Harbor packager + pluggable Innodata adapter, single-commit scrubber, no-network runtime, policy filter, cost ledger, separate verifier container, static HTML dashboard |
 
 ## Architecture
