@@ -29,16 +29,16 @@ def reward(status: dict[str, str], f2p: list[str], p2p: list[str]) -> float:
 
 
 def main(pytest_out: str, f2p_path: str, p2p_path: str, out_dir: str) -> None:
-    text = Path(pytest_out).read_text(errors="replace")
+    text = Path(pytest_out).read_text(errors="replace", encoding="utf-8")
     status = parse(text)
-    f2p, p2p = json.loads(Path(f2p_path).read_text()), json.loads(Path(p2p_path).read_text())
+    f2p, p2p = json.loads(Path(f2p_path).read_text(encoding="utf-8")), json.loads(Path(p2p_path).read_text(encoding="utf-8"))
     # "ERROR tests/test_x.py - ImportError": the whole file failed to collect (feature missing)
     broken = {ln.split()[1] for ln in text.splitlines() if ln.startswith("ERROR ") and "::" not in ln.split(" - ")[0]}
     for n in f2p:
         if n not in status and n.split("::")[0] in broken:
             status[n] = "failed"
-    Path(out_dir, "results.json").write_text(json.dumps(status, indent=0))
-    Path(out_dir, "reward.txt").write_text(str(reward(status, f2p, p2p)))
+    Path(out_dir, "results.json").write_text(json.dumps(status, indent=0), encoding="utf-8")
+    Path(out_dir, "reward.txt").write_text(str(reward(status, f2p, p2p)), encoding="utf-8")
 
 
 if __name__ == "__main__":

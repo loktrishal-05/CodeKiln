@@ -107,18 +107,18 @@ def _matrix(m: dict[str, Any] | None) -> str:
 
 
 def _package(d: Path) -> dict[str, Any]:
-    meta = tomllib.loads((d / "task.toml").read_text()).get("metadata", {})
-    instr = (d / "instruction.md").read_text() if (d / "instruction.md").exists() else ""
+    meta = tomllib.loads((d / "task.toml").read_text(encoding="utf-8")).get("metadata", {})
+    instr = (d / "instruction.md").read_text(encoding="utf-8") if (d / "instruction.md").exists() else ""
     title = next((ln.lstrip("# ").strip() for ln in instr.splitlines() if ln.strip()), d.name)
 
     def count(f: str) -> int | None:
         p = d / "tests" / f
-        return len(json.loads(p.read_text())) if p.exists() else None
+        return len(json.loads(p.read_text(encoding="utf-8"))) if p.exists() else None
 
     receipt_p = d / "generation_receipt.json"
-    receipt = json.loads(receipt_p.read_text()) if receipt_p.exists() else {}
+    receipt = json.loads(receipt_p.read_text(encoding="utf-8")) if receipt_p.exists() else {}
     dossier_p = d / "mutation_dossier.json"
-    dossier = json.loads(dossier_p.read_text()) if dossier_p.exists() else {}
+    dossier = json.loads(dossier_p.read_text(encoding="utf-8")) if dossier_p.exists() else {}
     gates = _mapping(receipt.get("gates"))
     # The packager does not emit gate rewards; read them from nested gates, and fall back to the
     # mutation dossier for the kill rate. Top-level keys win for older receipts.
@@ -200,7 +200,7 @@ def build_report(
     cands = _rows(con, "SELECT * FROM task_candidates WHERE run_id = ? ORDER BY id", run_id)
     evals = _rows(con, "SELECT e.* FROM eval_runs e JOIN task_candidates c ON c.id = e.candidate_id "
                        "WHERE c.run_id = ?", run_id)
-    m = json.loads(matrix.read_text()) if matrix and matrix.exists() else None
+    m = json.loads(matrix.read_text(encoding="utf-8")) if matrix and matrix.exists() else None
     shipped = sum(c["status"] == State.PACKAGED.value for c in cands)
     repo = Path(str(run[0]["url"]).rstrip("/")).name
     commit = str(run[0]["base_commit"])
@@ -220,7 +220,7 @@ def build_report(
         f'<section aria-labelledby="h-models"><h2 id="h-models">How models did</h2>'
         f"{_models(evals)}</section>"
     )
-    tpl = files("codekiln.templates").joinpath("report.html").read_text()
+    tpl = files("codekiln.templates").joinpath("report.html").read_text(encoding="utf-8")
     return (tpl.replace("{{title}}", f"CodeKiln run {run_id}: {_e(repo)}")
                .replace("{{repo}}", _e(repo)).replace("{{commit}}", _e(commit))
                .replace("{{run_id}}", str(run_id))

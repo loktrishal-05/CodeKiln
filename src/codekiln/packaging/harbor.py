@@ -61,17 +61,17 @@ def write_task(
     ctx = {"repo_url": repo_url, "base_commit": base_commit, "license": license,
            "category": category, "difficulty": difficulty,
            "python_version": python_version, "pytest_version": pytest_version}
-    (dst / "task.toml").write_text(render_template("harbor/task.toml.j2", **ctx))
-    (dst / "environment" / "Dockerfile").write_text(render_template("harbor/Dockerfile.j2", **ctx))
-    (dst / "instruction.md").write_text(instruction)
-    (dst / "solution" / "reference.diff").write_text(reference_diff)
+    (dst / "task.toml").write_text(render_template("harbor/task.toml.j2", **ctx), encoding="utf-8")
+    (dst / "environment" / "Dockerfile").write_text(render_template("harbor/Dockerfile.j2", **ctx), encoding="utf-8")
+    (dst / "instruction.md").write_text(instruction, encoding="utf-8")
+    (dst / "solution" / "reference.diff").write_text(reference_diff, encoding="utf-8")
     tpl = files("codekiln.templates").joinpath("harbor")
     for name, sub in zip(_STATIC, ("solution", "tests", "tests"), strict=True):
         p = dst / sub / name
-        p.write_text(tpl.joinpath(name).read_text())
+        p.write_text(tpl.joinpath(name).read_text(encoding="utf-8"), encoding="utf-8")
         p.chmod(0o755)
     for name, src in feature_tests.items():
-        (dst / "tests" / "feature" / name).write_text(src)
-    (dst / "tests" / "fail_to_pass.json").write_text(json.dumps(sorted(f2p), indent=1))
-    (dst / "tests" / "pass_to_pass.json").write_text(json.dumps(sorted(p2p), indent=1))
+        (dst / "tests" / "feature" / name).write_text(src, encoding="utf-8")
+    (dst / "tests" / "fail_to_pass.json").write_text(json.dumps(sorted(f2p), indent=1), encoding="utf-8")
+    (dst / "tests" / "pass_to_pass.json").write_text(json.dumps(sorted(p2p), indent=1), encoding="utf-8")
     return dst

@@ -22,14 +22,14 @@ def read_results(out: Path) -> dict[str, str]:
     """Per-test results of the newest job under OUT; {} when the trial crashed before the verifier."""
     jobs = sorted(d for d in out.iterdir() if d.is_dir()) if out.is_dir() else []
     for f in jobs[-1].glob("*/verifier/results.json") if jobs else []:
-        return dict(json.loads(f.read_text()))
+        return dict(json.loads(f.read_text(encoding="utf-8")))
     return {}
 
 
 def gate_runner(
     task: Path, work: Path, run: Run = harbor_runner.run, record: TrialRecord | None = None
 ) -> Runner:
-    f2p = set(json.loads((task / "tests" / "fail_to_pass.json").read_text()))
+    f2p = set(json.loads((task / "tests" / "fail_to_pass.json").read_text(encoding="utf-8")))
     n = count()
 
     def runner(phase: Phase) -> dict[str, str]:

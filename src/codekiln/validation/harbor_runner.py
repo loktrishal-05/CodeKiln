@@ -17,7 +17,7 @@ def read_rewards(job_out: Path) -> dict[str, float | None]:
     jobs = sorted(d for d in job_out.iterdir() if d.is_dir()) if job_out.is_dir() else []
     out: dict[str, float | None] = {}
     for f in jobs[-1].glob("*/result.json") if jobs else []:  # job dirs are timestamp-named
-        r = json.loads(f.read_text())
+        r = json.loads(f.read_text(encoding="utf-8"))
         vr = r.get("verifier_result") or {}
         out[Path(r["task_id"]["path"]).name] = (vr.get("rewards") or {}).get("reward")
     return out
