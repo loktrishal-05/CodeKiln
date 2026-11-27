@@ -38,6 +38,7 @@ def run(
     max_budget_usd: float = 5.0,  # accepted, not used here: the breaker lives in `synth` / `resume`
     workdir: Path = Path("workspaces"),
     calibration: Path | None = None,
+    commit: str | None = typer.Option(None, help="Pin the base commit (full SHA) instead of the default branch tip."),
 ) -> None:
     """Plan task candidates from REPO (git URL, directory or zip) and record them in the ledger.
 
@@ -45,7 +46,7 @@ def run(
     """
     con = connect(Settings().db_path)
     try:
-        s = run_pipeline(repo, slots, con, workdir, remap=_remap(calibration))
+        s = run_pipeline(repo, slots, con, workdir, remap=_remap(calibration), commit=commit)
     except IngestionError as e:
         typer.echo(f"ingestion failed: {e}", err=True)
         raise typer.Exit(1) from e
@@ -71,6 +72,7 @@ def factory(
     agent: bool = typer.Option(False, help="Let a model order the allowed actions (metered)."),
     corpus: Annotated[list[Path] | None, typer.Option(help="Later checkout(s) of the repo: reject features already in them.")] = None,
     calibration: Path | None = None,
+    commit: str | None = typer.Option(None, help="Pin the base commit (full SHA) for a new run."),
 ) -> None:
     """Plan (or resume) a run, then drive every candidate through every gate to a package.
 
@@ -92,7 +94,7 @@ def factory(
     workspace: Path | None = None
     if repo is not None:
         try:
-            s = run_pipeline(repo, slots, con, workdir, remap=_remap(calibration))
+            s = run_pipeline(repo, slots, con, workdir, remap=_remap(calibration), commit=commit)
         except IngestionError as e:
             typer.echo(f"ingestion failed: {e}", err=True)
             raise typer.Exit(1) from e

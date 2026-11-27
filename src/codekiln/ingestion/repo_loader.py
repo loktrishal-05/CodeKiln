@@ -83,6 +83,8 @@ def load_repo(source: str, dest: Path, commit: str | None = None) -> str:
             raise IngestionError(f"unsupported source: {source}")
         _git("config", "core.hooksPath", os.devnull, cwd=dest)
         if commit:
+            if commit.startswith("-"):  # a pin goes to `git checkout`: never let it read as an option
+                raise IngestionError(f"invalid commit/ref: {commit!r}")
             _git("checkout", "-q", "--detach", commit, cwd=dest)
         _reject_escaping_symlinks(dest)
         return _git("rev-parse", "HEAD", cwd=dest)

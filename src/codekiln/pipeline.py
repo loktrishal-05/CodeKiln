@@ -39,12 +39,13 @@ def workspace_path(source: str, commit: str, workdir: Path) -> Path:
 def run_pipeline(
     source: str, slots: int, con: sqlite3.Connection, workdir: Path,
     remap: Mapping[str, str] | None = None,
+    commit: str | None = None,
 ) -> RunSummary:
     if Path(source).exists():
         source = str(Path(source).resolve())  # same repo, same key, however it was spelled
     workdir.mkdir(parents=True, exist_ok=True)
     tmp = workdir / f".tmp-{uuid.uuid4().hex[:8]}"
-    commit = load_repo(source, tmp)
+    commit = load_repo(source, tmp, commit)  # COMMIT pins the base (e.g. the judges' click 8.5.1)
     ws = workspace_path(source, commit, workdir)
     if ws.exists():  # resume: this exact (repo, commit) is already checked out
         shutil.rmtree(tmp)
