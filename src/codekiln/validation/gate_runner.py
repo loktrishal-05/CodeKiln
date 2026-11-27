@@ -2,8 +2,9 @@
 
 B runs `nop`, C runs `oracle`; per-test statuses come from the trial's verifier/results.json
 (written by templates/harbor/reward.py, already {node_id: status}). Each call gets a fresh -o dir.
-ponytail: State A = the nop results minus the F2P nodes, because test.sh always copies the feature
-tests in; revisit if the packager grows a run without them (issue #19).
+Resolved option for issue #19: State A = nop results minus F2P nodes, because `test.sh` always
+copies the feature tests in (so a nop trial is really State B). Revisit only if the packager grows
+a run that omits them.
 """
 import json
 from collections.abc import Callable
