@@ -192,7 +192,9 @@ def _dossier(task: str, probes: tuple[ProbeResult, ...], threshold: float) -> Do
     adversarial = [p for p in probes if p.kind == "adversarial"]
     if adversarial and not all(p.killed for p in adversarial):
         names = [p.name for p in adversarial if not p.killed]
-        reasons.append(f"adversarial mutant survived: {names}")
+        # The model's "wrong" patch can be accidentally correct (an equivalent mutant), so a
+        # survivor is a test gap OR a mutant that was never wrong: look before editing the tests.
+        reasons.append(f"adversarial mutant survived: {names} (test gap, or the mutant is actually correct)")
     if len(semantic) < 3:
         reasons.append(f"only {len(semantic)} semantic mutants could be built (need >= 3)")
     if rate < threshold:
