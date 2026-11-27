@@ -478,6 +478,8 @@ def calibrate(
     typer.echo(f"{len(cals)} task(s) calibrated, remap {remap or 'none yet'} -> {out}")
     for c in cals:
         flag = "" if c.discriminates else "  (does not separate models)"
+        if c.inverted:
+            flag += "  (INVERTED: stronger models do worse; check the task)"
         typer.echo(f"  {c.task}: guessed {c.heuristic or '?'}, observed {c.observed}"
                    f" ({c.solved}/{c.models} solved){flag}")
 
