@@ -8,10 +8,10 @@ never decided here: the Harbor gate and mutation probes remain the judge.
 import json
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from codekiln.planner.models import Plan
-from codekiln.synthesis.llm_router import Writer
+from codekiln.synthesis.llm_router import RouterError, Writer
 from codekiln.synthesis.models import FeatureSpec, SynthesisError, validate
 from codekiln.synthesis.rtm import require_ok
 from codekiln.validation.blind_reader import lint_instruction
@@ -48,12 +48,26 @@ class Ideation:
 
 
 def propose(
-    plan: Plan, writer: Writer, *, n: int, repo: str, base_commit: str
+    plan: Plan, writer: Writer, *, n: int, repo: str, base_commit: str,
+    errors: list[tuple[str, str]] | None = None,
 ) -> tuple[FeatureSpec, ...]:
-    """Ask the writer for N candidates for one slot; proposal 0 is the single-writer baseline."""
+    """Ask the writer for N candidates for one slot; proposal 0 is the single-writer baseline.
+
+    With ERRORS given, a proposal the writer could not produce (repair exhausted, provider
+    failure) is recorded there and the others still run; without it the first failure raises.
+    A budget stop always propagates.
+    """
     if n < 1:
         raise ValueError("at least one candidate per slot is required")
-    return tuple(writer.write(plan, repo=repo, base_commit=base_commit) for _ in range(n))
+    specs: list[FeatureSpec] = []
+    for i in range(n):
+        try:
+            specs.append(writer.write(plan, repo=repo, base_commit=base_commit))
+        except (SynthesisError, RouterError) as e:
+            if errors is None:
+                raise
+            errors.append((f"proposal-{i}", f"writer: {e}"))
+    return tuple(specs)
 
 
 def _tokens(spec: FeatureSpec) -> frozenset[str]:
@@ -116,5 +130,7 @@ def ideate(
     novelty: float = DEFAULT_NOVELTY,
 ) -> Ideation:
     """Propose N specs for one slot and return only those a deterministic critic admits."""
-    return critique(propose(plan, writer, n=n, repo=repo, base_commit=base_commit),
-                    plan, novelty=novelty)
+    failed: list[tuple[str, str]] = []
+    specs = propose(plan, writer, n=n, repo=repo, base_commit=base_commit, errors=failed)
+    result = critique(specs, plan, novelty=novelty)
+    return replace(result, proposed=n, rejected=(*failed, *result.rejected))

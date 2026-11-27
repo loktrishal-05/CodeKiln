@@ -37,3 +37,26 @@ Standard library only for this part: `ast`, `subprocess` (git), `zipfile`, `hash
 
 ### Manual-fix log
 - **Nov 27, found by running on real click:** `classify` matched hints on the full path, so every file under `src/click/` was labelled API/CLI (the `cli` hint matched "click"), and `examples/` demo scripts were being planned as features. The synthetic test repo had hidden both. Fixed in #17: match on the filename only and skip `examples/` and `docs/`.
+
+## Sandbox, packaging & DevOps (Cholan Abhaynadh Kinnera)
+
+### Profiler (`ingestion/profiler.py`)
+- **Static-only inspection (SPEC trust boundary 1):** reads `pyproject.toml` via stdlib `tomllib`, `.python-version`, `setup.py`/`setup.cfg`, `uv.lock`/`poetry.lock`, `requirements*.txt`, and `package.json` without importing or executing any target repo code.
+- **Safety guards:** resolves manifest paths against `root.resolve()` to reject symlink escapes, enforces a 2 MB manifest read cap, validates Python version pins against an allowlist (`3.10`–`3.13`, default `3.12`), and restricts extras (`dev`/`test`/`tests`/`testing`) and requirements paths to safe character regexes so untrusted TOML strings cannot inject Dockerfile directives.
+- **Known ceilings:** `setup.py` / `setup.cfg` are detected for `pip` installs rather than AST-evaluated for dynamic extras; Wave 2's Node/TypeScript adapter was cut once the rules pinned the target to `pallets/click`.
+
+### Cached env bootstrap & templates (`ingestion/env_bootstrap.py`, `templates/dockerfiles/python.Dockerfile.j2`)
+- **One cached image per `(repo_id, commit, arch)`:** `image_tag` hashes `repo_id|commit|docker_platform` across normalized `linux/amd64` and `linux/arm64` targets. `bootstrap_env` checks `docker image inspect` (verifying both image existence and matching architecture) before building, and upserts `stack` + `image_digest` into SQLite `repositories`.
+- **Clean build context & non-root execution:** the rendered `Dockerfile` is written to a temporary directory outside the target repository so the working tree stays clean. The image runs as non-root `codekiln` (`UID 10001`), installs into `/opt/venv`, and ensures `pytest` is installed.
+- **Template engine (`templates/__init__.py`):** `Jinja2` `FileSystemLoader` with `StrictUndefined`, shared by Dockerfile and Harbor templates.
+
+### Harbor execution, packaging & reproducibility
+- **Judge parity (course correction):** instead of a separate `docker-py` runner, verification and trials execute through Harbor 0.25 (`packaging/harbor.py`, `validation/harbor_runner.py`, `validation/gate_runner.py`, `packaging/scrubber.py`, `packaging/packager.py`), ensuring `nop -> 0.0` and `oracle -> 1.0` match the judges' exact evaluation path (`network_mode = "no-network"`, single orphan commit, editable install, SHA-256 manifest, atomic `os.replace()`).
+- **Reproducible factory runner & CI hardening (PR #55):** root `Dockerfile` + `.dockerignore` (non-root `UID 10001`, `harbor==0.25.*`, `docker-cli`, `docker-buildx`, no baked secrets), `scripts/demo_run.sh` (end-to-end CLI driver + `--dry-run`), and `.github/workflows/ci.yml` (`permissions: contents: read`, tracked secret/env guard, shell check, `docker-smoke` build check).
+
+### Reuse and tools
+- `Jinja2` (`StrictUndefined` templates), `docker` CLI + `docker-buildx` (multi-arch builds and `inspect` cache checks), Harbor `0.25.*`, stdlib `tomllib`, `hashlib`, `subprocess`, `tempfile`, `sqlite3`. No LLM call in these modules.
+
+### Manual-fix log
+- **Nov 27, symlink test on Windows:** `test_profile_rejects_invalid_toml_missing_dir_and_escaping_symlink` failed where unprivileged Windows hosts disallow symlinks; updated in #33 to skip symlink creation when `OSError` is raised while keeping Linux CI enforcement active.
+- **Nov 27, `repo_url` validation vs local paths:** `packaging/harbor.py` enforces `https://...` on `repo_url`, so `scripts/demo_run.sh` defaults to `https://github.com/pallets/click` in full mode and reserves local paths for `--dry-run`.

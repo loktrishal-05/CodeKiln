@@ -13,7 +13,7 @@ from codekiln.planner.models import Category, Plan, dump_plan
 from codekiln.states import State
 from codekiln.synthesis.ideator import critique, ideate, propose
 from codekiln.synthesis.llm_router import LLMWriter
-from codekiln.synthesis.models import FeatureSpec, Requirement
+from codekiln.synthesis.models import FeatureSpec, Requirement, SynthesisError
 
 PLAN = Plan(Category.API_CLI, frozenset({"src/click/utils.py"}), frozenset({"echo", "CliRunner"}), "forward")
 NOVEL_INSTRUCTION = """# Reversed message output
@@ -138,3 +138,57 @@ def test_cli_ideate_writes_a_report_and_meters_the_calls(
         assert con.execute("SELECT status FROM task_candidates").fetchone()[0] == State.DIVERSITY_OK.value
     finally:
         con.close()
+
+
+class FlakyWriter:
+    """Fails (as an exhausted repair does) on the listed 0-based calls, otherwise returns SPECS in turn."""
+
+    def __init__(self, fail_on: set[int], specs: list[FeatureSpec]) -> None:
+        self.fail_on, self.specs, self.n = fail_on, specs, 0
+
+    def write(self, plan: Plan, *, repo: str, base_commit: str) -> FeatureSpec:
+        i, self.n = self.n, self.n + 1
+        if i in self.fail_on:
+            raise SynthesisError("no valid spec after 3 attempts: RTM audit failed")
+        return self.specs[i % len(self.specs)]
+
+
+def test_a_failed_proposal_does_not_abort_the_slot() -> None:
+    writer = FlakyWriter({1}, [make_spec(), novel()])
+    report = ideate(PLAN, writer, n=3, repo=REPO, base_commit=SHA)
+    assert report.proposed == 3 and writer.n == 3  # all three attempted
+    assert ("proposal-1", "writer: no valid spec after 3 attempts: RTM audit failed") in report.rejected
+    assert len(report.kept) >= 1
+
+
+def test_cli_ideate_keeps_other_slots_when_one_fails_and_tags_candidate_ids(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db = tmp_path / "k.sqlite"
+    con = connect(str(db))
+    con.execute("INSERT INTO repositories (url, base_commit) VALUES (?, ?)", (REPO, SHA))
+    rid = con.execute("SELECT id FROM repositories").fetchone()[0]
+    con.execute("INSERT INTO factory_runs (repo_id, mode, slots) VALUES (?, 'dual', 2)", (rid,))
+    run_id = con.execute("SELECT id FROM factory_runs").fetchone()[0]
+    for i in range(2):
+        con.execute("INSERT INTO task_candidates (run_id, idempotency_key, category, status) VALUES (?, ?, 'api_cli', ?)",
+                    (run_id, idempotency_key(REPO, SHA, "dual", i), State.DIVERSITY_OK.value))
+    for (cid,) in con.execute("SELECT id FROM task_candidates ORDER BY id").fetchall():
+        con.execute("INSERT INTO task_plans (candidate_id, plan_json) VALUES (?, ?)", (cid, dump_plan(PLAN)))
+    con.commit()
+    ids = [c for (c,) in con.execute("SELECT id FROM task_candidates ORDER BY id")]
+    con.close()
+
+    def write(self: LLMWriter, plan: Plan, *, repo: str, base_commit: str) -> FeatureSpec:
+        raise SynthesisError("provider is down")  # every proposal fails: slot 1 must still not crash slot 2
+
+    monkeypatch.setattr(LLMWriter, "write", write)
+    monkeypatch.setenv("CODEKILN_DB_PATH", str(db))
+    monkeypatch.setenv("CODEKILN_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("CODEKILN_BILLING_LEDGER", str(tmp_path / "billing.csv"))
+    out = tmp_path / "ideation.json"
+    res = CliRunner().invoke(app, ["ideate", str(run_id), "--candidates", "2", "--out", str(out)])
+    assert res.exit_code == 0, res.output
+    reports = json.loads(out.read_text())
+    assert [r["candidate_id"] for r in reports] == ids  # both slots reported, each tagged
+    assert all(r["ok"] is False for r in reports)

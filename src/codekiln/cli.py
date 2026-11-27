@@ -21,8 +21,8 @@ def _todo(name: str) -> None:
 @app.command()
 def run(
     repo: str,
-    slots: int = typer.Option(5, min=1),
-    max_budget_usd: float = 5.0,  # unused until synthesis spends money
+    slots: int = typer.Option(6, min=1),  # the six click planner subsystems
+    max_budget_usd: float = 5.0,  # accepted, not used here: the breaker lives in `synth` / `resume`
     workdir: Path = Path("workspaces"),
 ) -> None:
     """Plan task candidates from REPO (git URL, directory or zip) and record them in the ledger.
@@ -185,6 +185,7 @@ def ideate(
     from codekiln.planner.models import load_plan
     from codekiln.synthesis.ideator import ideate as run_ideation
     from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError, http_post
+    from codekiln.synthesis.models import SynthesisError
 
     settings = Settings()
     ledger_path = db or Path(settings.db_path)
@@ -221,23 +222,32 @@ def ideate(
             (run_id, State.DIVERSITY_OK.value),
         ).fetchall()
         writer = LLMWriter(config, post=budget.meter_post(http_post))
-        reports = []
+        reports: list[dict[str, object]] = []
+        stopped = ""
         for cid, plan_json in slots:
             if not plan_json:
                 continue
             budget.start_candidate(cid)
             try:
                 budget.guard()
-                reports.append(run_ideation(load_plan(plan_json), writer, n=candidates,
-                                            repo=repo, base_commit=base_commit).to_json())
+                report = json.loads(run_ideation(load_plan(plan_json), writer, n=candidates,
+                                                 repo=repo, base_commit=base_commit).to_json())
             except BudgetExceeded as e:
-                typer.echo(f"stopped: BUDGET_EXCEEDED: {e}", err=True)
+                stopped = f"BUDGET_EXCEEDED: {e}"
+                reports.append({"candidate_id": cid, "ok": False, "error": stopped})
                 break
+            except (SynthesisError, RouterError, ValueError) as e:  # one slot must not lose the rest
+                report = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+            report["candidate_id"] = cid
+            reports.append(report)
     finally:
         con.close()
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("[\n" + ",\n".join(reports) + "\n]\n", encoding="utf-8")
+    out.write_text(json.dumps(reports, indent=2) + "\n", encoding="utf-8")
     typer.echo(f"run {run_id}: {len(reports)} slot report(s) -> {out}; ${bills.spent(run_id):.4f} spent")
+    if stopped:
+        typer.echo(f"stopped: {stopped}", err=True)
+        raise typer.Exit(1)
 
 
 @app.command(name="blind-read")

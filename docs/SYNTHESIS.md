@@ -10,6 +10,26 @@ pipeline stage (`DIVERSITY_OK -> BLIND_READER_OK`), the dry-run instruction lint
 mutation probes, the cost ledger with a hard budget breaker / idempotent resume, and the blind
 eval runner with `eval_receipt.json` are in.
 
+## Real-model run (six planner slots)
+
+The planner seeds one slot per click subsystem (types, parser/options, formatting/help, shell
+completion, testing/CliRunner, termui), so `codekiln run` defaults to six slots. On the host, with
+the key supplied only through the environment:
+
+```bash
+export CODEKILN_LLM_API_KEY=...        # host only, never passed into a container
+codekiln run https://github.com/pallets/click --slots 6 --workdir workspaces
+codekiln synth RUN_ID --max-budget-usd 5.0
+codekiln resume RUN_ID                 # only if the breaker stopped the first pass
+```
+
+Every completion goes through `Budget.meter_post`, so `billing_ledger.csv` records one
+`PREAUTH_HOLD` + `PREAUTH_RELEASE` + `LLM_DEBIT` per provider call plus the idempotent
+`BUDGET_ALLOCATION`. A spec is written only after `validate`, the RTM audit and the blind-reader
+linter pass; execution correctness is still decided later by Harbor in the 3-state gate.
+`tests/unit/test_six_slot_synthesis.py` exercises this exact path with the HTTP call faked and
+asserts all six packages plus the CSV events.
+
 ## Ideator + critic (#44)
 
 `codekiln ideate RUN_ID --candidates N` asks the writer for N specs per slot and writes
