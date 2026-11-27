@@ -46,7 +46,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 
 Rule: agents propose, code decides. Every pass/fail stays in the gates, probes, scrubber and Harbor reward; each agent sits behind a flag and must beat the single-writer baseline on the same slots to stay. Gate: do not start until 5 real packages pass Harbor nop 0.0 / oracle 1.0 (issues #34-#39). Research and rationale: the "CodeKiln Upgrade Research" doc.
 
-- [ ] **[L]** Orchestrator agent over the state machine (allowed actions only, step limit, budget) (#40)
+- [x] **[L]** Orchestrator agent over the state machine (allowed actions only, step limit, budget) (#40)
 - [ ] **[L]** Repo Scout: context packs per click subsystem (#41)
 - [ ] **[L]** Contamination firewall: later click releases/issues/PRs + memorisation probe (#42)
 - [ ] **[L]** Difficulty calibration from eval results, feeding the L1/L2/L3 dial (#43)

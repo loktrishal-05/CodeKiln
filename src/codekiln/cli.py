@@ -54,13 +54,16 @@ def factory(
     max_budget_usd: float | None = None,
     ledger_csv: Path | None = None,
     runs: int = typer.Option(3, min=1),
+    agent: bool = typer.Option(False, help="Let a model order the allowed actions (metered)."),
 ) -> None:
     """Plan (or resume) a run, then drive every candidate through every gate to a package.
 
     Harbor and Docker must be installed. Re-running with --run-id resumes from the ledger.
+    With --agent a model only chooses which allowed action runs next; the gates still decide.
     """
     from codekiln.billing.ledger import BillingLedger, Budget, Pricing
     from codekiln.factory import run_factory
+    from codekiln.orchestrator import LLMChooser
     from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError, http_post
 
     if (repo is None) == (run_id is None):
@@ -92,10 +95,15 @@ def factory(
         bills, run_id, settings.max_budget_usd if max_budget_usd is None else max_budget_usd,
         config.model, pricing,
     )
+    chooser = LLMChooser(config, post=budget.meter_post(http_post), budget=budget) if agent else None
     result = run_factory(
         con, run_id, writer=LLMWriter(config, post=budget.meter_post(http_post)),
         staging=work / "staging", dest=dest, work=work, db=ledger, budget=budget,
-        runs=runs, model=config.model,
+        runs=runs, model=config.model, chooser=chooser,
+    )
+    work.mkdir(parents=True, exist_ok=True)  # the trace of who picked each action, for the report
+    (work / "orchestrator_decisions.json").write_text(
+        json.dumps([d.to_dict() for d in result.decisions], indent=2) + "\n", encoding="utf-8"
     )
     typer.echo(
         f"run {run_id}: {len(result.packaged)} packaged, {len(result.rejected)} rejected,"

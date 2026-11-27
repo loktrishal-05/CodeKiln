@@ -13,6 +13,7 @@ from pathlib import Path
 
 from codekiln.billing.ledger import Budget
 from codekiln.config import Settings
+from codekiln.orchestrator import Chooser, Decision, Pending, pick
 from codekiln.packaging.packager import PackageRejected, PackageSpec, promote
 from codekiln.packaging.scrubber import audit_task
 from codekiln.states import State
@@ -39,6 +40,7 @@ class FactorySummary:
     rejected: dict[str, str] = field(default_factory=dict)  # task -> reason
     unfinished: int = 0  # candidates left mid-pipeline (budget stop, step limit, retryable failure)
     stopped: str = ""
+    decisions: list[Decision] = field(default_factory=list)  # who picked each action, and why
 
 
 @dataclass
@@ -118,6 +120,16 @@ def _row(con: sqlite3.Connection, cid: int) -> tuple[str, str, str | None]:
     return status, path or "", reason
 
 
+def _pending(con: sqlite3.Connection, run_id: int, stuck: set[int]) -> list[Pending]:
+    rows = con.execute(
+        "SELECT c.id, c.status, p.package_path, COALESCE(c.category, ''), COALESCE(c.difficulty, '')"
+        " FROM task_candidates c JOIN task_plans p ON p.candidate_id = c.id"
+        " WHERE c.run_id = ? AND p.package_path IS NOT NULL ORDER BY c.id", (run_id,),
+    ).fetchall()
+    return [Pending(cid, st, NEXT_STAGE[st], path, cat, diff)
+            for cid, st, path, cat, diff in rows if st in NEXT_STAGE and cid not in stuck]
+
+
 def run_factory(
     con: sqlite3.Connection,
     run_id: int,
@@ -133,6 +145,7 @@ def run_factory(
     runs: int = 3,
     model: str = "codekiln",
     max_steps: int = DEFAULT_MAX_STEPS,
+    chooser: Chooser | None = None,
 ) -> FactorySummary:
     """Drive every candidate of RUN_ID as far as its gates allow; safe to call again to resume."""
     out = FactorySummary()
@@ -142,20 +155,23 @@ def run_factory(
     ctx = Context(con, db, work, dest, runs, model,
                   cost_usd=0.0, verify_run=verify_run or harbor_runner.run, probe_run=probe_run)
     ids = [r[0] for r in con.execute("SELECT id FROM task_candidates WHERE run_id = ? ORDER BY id", (run_id,))]
-    for cid in ids:
+    stuck: set[int] = set()  # a gate that did not move its candidate is not retried in this call
+    while out.steps < max_steps:
+        pending = _pending(con, run_id, stuck)
+        if not pending:
+            break
+        chosen, decision = pick(chooser, pending)  # the agent (if any) only orders allowed actions
+        out.decisions.append(decision)
+        if chosen is None:
+            break
         ctx.cost_usd = sum(  # this candidate's own LLM spend, from the append-only billing ledger
             float(r["amount_usd"]) for r in (budget.ledger.rows(run_id) if budget else [])
-            if r["event"] == "LLM_DEBIT" and r["candidate_id"] == str(cid)
+            if r["event"] == "LLM_DEBIT" and r["candidate_id"] == str(chosen.candidate_id)
         )
-        while out.steps < max_steps:
-            status, path, _ = _row(con, cid)
-            stage = NEXT_STAGE.get(status)
-            if stage is None or not path:
-                break
-            STAGES[stage](ctx, cid, Path(path))
-            out.steps += 1
-            if _row(con, cid)[0] == status:  # a gate that did not move the candidate must not spin
-                break
+        STAGES[chosen.stage](ctx, chosen.candidate_id, Path(chosen.package))
+        out.steps += 1
+        if _row(con, chosen.candidate_id)[0] == chosen.status:
+            stuck.add(chosen.candidate_id)
     for cid in ids:
         status, path, reason = _row(con, cid)
         name = Path(path).name if path else f"candidate-{cid}"
