@@ -82,3 +82,13 @@ def test_forward_seeds_target_click_subsystems(tmp_path: Path):
     assert frozenset({"src/click/parser.py", "src/click/core.py"}) in files  # parser/options
     assert frozenset({"src/click/termui.py"}) in files
     assert frozenset({"src/click/formatting.py"}) not in files  # absent module -> no seed
+
+
+def test_classify_ignores_directory_names_and_examples_are_skipped(tmp_path: Path):
+    from codekiln.planner.reverse_extract import classify
+
+    assert classify("src/click/types.py") is Category.CORE_LOGIC  # not API_CLI via "click"
+    assert classify("src/click/sub/cli.py") is Category.API_CLI
+    (tmp_path / "examples").mkdir()
+    (tmp_path / "examples/demo.py").write_text("def run():\n    pass\n")
+    assert "examples/demo.py" not in scan(tmp_path).symbols

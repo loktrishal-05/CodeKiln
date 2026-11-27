@@ -11,7 +11,7 @@ from pathlib import Path
 
 from codekiln.planner.models import Category, Plan
 
-_SKIP_DIRS = {"tests", "test", "venv", "node_modules", "site-packages", "build", "dist", "__pycache__"}
+_SKIP_DIRS = {"tests", "test", "venv", "node_modules", "site-packages", "build", "dist", "__pycache__", "examples", "docs"}
 _HINTS = (
     (Category.API_CLI, ("cli", "api", "route", "view", "handler", "command", "main")),
     (Category.VALIDATION, ("valid", "schema", "check", "lint", "sanit")),
@@ -94,7 +94,7 @@ def scan(root: Path) -> Scan:
 
 
 def classify(file: str) -> Category:
-    low = file.lower()
+    low = Path(file).name.lower()  # filename only: "click/" in the path would match the "cli" hint
     for cat, keys in _HINTS:
         if any(k in low for k in keys):
             return cat
