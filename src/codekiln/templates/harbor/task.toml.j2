@@ -1,0 +1,19 @@
+schema_version = "1.4"
+
+[metadata]
+repo = {{ repo_url | tojson }}
+base_commit = {{ base_commit | tojson }}
+license = {{ license | tojson }}
+category = {{ category | tojson }}
+difficulty = {{ difficulty | tojson }}
+generator = "codekiln"
+
+[verifier]
+timeout_sec = 900.0
+
+[agent]
+timeout_sec = 1800.0
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 900.0

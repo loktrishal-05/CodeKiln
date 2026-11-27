@@ -28,15 +28,17 @@ One reusable pipeline that takes the click repo at a pinned commit and emits 5+ 
   instruction.md            # only file the evaluated agent sees
   task.toml                 # schema_version="1.4"; [metadata] repo, base_commit (40 chars), license,
                             #   category, difficulty; [environment] network_mode="no-network";
-                            #   [verifier] environment_mode="separate"
-  environment/Dockerfile    # clones click at base_commit, installs deps, all existing tests pass
+                            #   verifier shares the agent container (verified); "separate" = upgrade
+  environment/Dockerfile    # clones click at base_commit, re-inits ONE orphan commit, `pip install -e .`
+                            #   (editable: tests must import the code the agent edits), git + less
   solution/solve.sh         # `git apply` of solution/reference.diff
   solution/reference.diff
-  tests/test.sh             # runs F2P + P2P with pytest --ctrf /logs/verifier/ctrf.json,
-                            #   writes /logs/verifier/reward.txt per the reward formula
+  tests/test.sh             # restores pristine tests/, copies tests/feature/ in, runs pytest -rA
+                            #   --continue-on-collection-errors, then tests/reward.py
+  tests/reward.py           # official reward formula -> /logs/verifier/reward.txt + results.json
   tests/fail_to_pass.json   # SWE-bench style node ids
-  tests/pass_to_pass.json
-  tests/test_<feature>.py   # the new feature tests
+  tests/pass_to_pass.json   # computed INSIDE the task container (host pytest ids differ)
+  tests/feature/test_<feature>.py   # the new feature tests (hidden from the agent until grading)
   generation_receipt.json   # ours: gate results, hashes, model, cost
   manifest.sha256
 ```
