@@ -7,7 +7,7 @@ probes, the scrubber). The Harbor runners are injected so the whole loop is test
 """
 import hashlib
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -20,6 +20,7 @@ from codekiln.states import State
 from codekiln.synthesis.llm_router import Writer
 from codekiln.synthesis.runner import synthesize
 from codekiln.validation import harbor_runner
+from codekiln.validation.firewall import check as firewall_check
 from codekiln.validation.gate_runner import Run
 from codekiln.validation.mutation_probe import ProbeRun, probe_package, read_dossier, write_dossier
 from codekiln.validation.verify import verify_package
@@ -54,6 +55,7 @@ class Context:
     cost_usd: float = 0.0
     verify_run: Run | None = None
     probe_run: ProbeRun | None = None
+    corpus: Sequence[Path] = ()
 
 
 def _reject(con: sqlite3.Connection, cid: int, reason: str) -> None:
@@ -75,6 +77,13 @@ def _verify(ctx: Context, cid: int, package: Path) -> None:
 
 
 def _probe(ctx: Context, cid: int, package: Path) -> None:
+    if ctx.corpus:  # cheapest gate first: a feature a later release already has is not new
+        report = firewall_check(package, ctx.corpus)
+        (package / "firewall.json").write_text(report.to_json(), encoding="utf-8")
+        if not report.ok:
+            _reject(ctx.con, cid, "firewall: already in a later release: "
+                    + ", ".join(sorted({h.marker for h in report.hits})))
+            return
     dossier = probe_package(
         package, ctx.work / "probes", run=ctx.probe_run, threshold=Settings().mutant_kill_threshold
     )
@@ -147,6 +156,7 @@ def run_factory(
     max_steps: int = DEFAULT_MAX_STEPS,
     chooser: Chooser | None = None,
     workspace: Path | None = None,
+    corpus: Sequence[Path] = (),
 ) -> FactorySummary:
     """Drive every candidate of RUN_ID as far as its gates allow; safe to call again to resume."""
     out = FactorySummary()
@@ -154,7 +164,7 @@ def run_factory(
     out.steps += 1
     out.stopped = synth.stopped
     ctx = Context(con, db, work, dest, runs, model,
-                  cost_usd=0.0, verify_run=verify_run or harbor_runner.run, probe_run=probe_run)
+                  cost_usd=0.0, verify_run=verify_run or harbor_runner.run, probe_run=probe_run, corpus=corpus)
     ids = [r[0] for r in con.execute("SELECT id FROM task_candidates WHERE run_id = ? ORDER BY id", (run_id,))]
     stuck: set[int] = set()  # a gate that did not move its candidate is not retried in this call
     while out.steps < max_steps:

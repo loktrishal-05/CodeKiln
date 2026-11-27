@@ -48,7 +48,7 @@ Rule: agents propose, code decides. Every pass/fail stays in the gates, probes, 
 
 - [x] **[L]** Orchestrator agent over the state machine (allowed actions only, step limit, budget) (#40)
 - [x] **[L]** Repo Scout: context packs per click subsystem (#41)
-- [ ] **[L]** Contamination firewall: later click releases/issues/PRs + memorisation probe (#42)
+- [x] **[L]** Contamination firewall: later click releases/issues/PRs + memorisation probe (#42)
 - [ ] **[L]** Difficulty calibration from eval results, feeding the L1/L2/L3 dial (#43)
 - [ ] **[S]** Feature Ideator + Critic (#44)
 - [ ] **[S]** Test Author + Test Critic: alternative correct solution, flag too-narrow tests (#45)
