@@ -5,8 +5,9 @@ The synthesizer's whole job is to turn one `Plan` into one `FeatureSpec`. Everyt
 the shape is fixed here before the LLM router lands. This page is the contract Cholan and Harsha
 wire against; `src/codekiln/synthesis/models.py` is the executable version.
 
-Status: **draft** — shape + validation + RTM gate + package emitter are in; the model call is the
-next PR. `codekiln spec-check` accepts a hand-written spec today, so nobody is blocked.
+Status: **contract + router** — shape, validation, RTM gate, package emitter and the
+OpenAI-compatible writer are in; pipeline wiring is next. `codekiln spec-check` accepts a
+hand-written spec today, so nobody is blocked.
 
 ## What consumes what
 
@@ -98,13 +99,21 @@ Exit 1 prints every problem, not just the first.
 | `synthesis/rtm.py` | `audit` -> `RtmMap`, `require_ok`, `write_map` |
 | `synthesis/emit.py` | `write_package`: validate + RTM + `packaging.harbor.write_task` |
 | `synthesis/spec_generator.py` | deterministic contract-first prompt for the writer |
+| `synthesis/llm_router.py` | OpenAI-compatible client, JSON parsing, bounded repair |
+
+## Provider
+
+Any OpenAI-compatible `/chat/completions` endpoint works. Credentials are host-only
+(`CODEKILN_LLM_BASE_URL`, `CODEKILN_LLM_API_KEY`, `CODEKILN_LLM_MODEL`) and never reach a
+container. The writer validates and RTM-checks every reply and retries at most twice with the
+rejection reason appended; it never records its own success.
 
 ## Next (in order)
 
-1. LLM router: prompt -> JSON -> `load_spec`-style parse -> repair loop (max 2, `states.MAX_REPAIR_RETRIES`).
-2. Wire into `pipeline.py`: candidates move `DIVERSITY_OK -> SYNTHESIZED` (or `REJECTED` with a
-   reason) and the ledger gets the spec hash.
-3. `codekiln synth --run-id` so a fresh checkout can produce specs without a Python session.
+1. Pipeline wiring: `DIVERSITY_OK -> SYNTHESIZED` (or `REJECTED` + reason in the ledger), plus
+   `codekiln synth --run-id` for a fresh checkout.
+2. Mutation probes: four classes, each a Harbor trial with a swapped `solution/`.
+3. Cost ledger, budget breaker and idempotent resume.
 
 ## Team asks
 

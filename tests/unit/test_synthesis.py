@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from spec_examples import DIFF, INSTRUCTION, REPO, SHA, make_spec
 from typer.testing import CliRunner
 
 from codekiln.cli import app
@@ -12,60 +13,11 @@ from codekiln.synthesis.models import FeatureSpec, Requirement, SynthesisError, 
 from codekiln.synthesis.rtm import audit, defined_nodes, write_map
 from codekiln.synthesis.spec_generator import render_prompt
 
-SHA = "cf19179e8e2fd54c601378cec9e0d21bb12b6fb1"
-REPO = "https://github.com/pallets/click"
-
-INSTRUCTION = """# Uppercase echo
-
-## Requirements
-- REQ-1: `echo` takes `uppercase: bool = False` and upper-cases the message.
-- REQ-2: `CliRunner` captures the uppercased output.
-
-## Errors
-- `TypeError` when `uppercase` is not a bool.
-"""
-FEATURE_TESTS = {
-    "test_echo_uppercase.py": (
-        "from click import echo\n"
-        "from click.testing import CliRunner\n\n"
-        "def test_req1_uppercases():\n    assert echo\n\n"
-        "def test_req2_runner():\n    assert CliRunner\n"
-    )
-}
-DIFF = (
-    "diff --git a/src/click/utils.py b/src/click/utils.py\n"
-    "--- a/src/click/utils.py\n"
-    "+++ b/src/click/utils.py\n"
-    "@@ -1 +1,2 @@\n"
-    "-def echo():\n"
-    "+def echo(uppercase=False):\n"
-    "+    pass\n"
-)
+_spec = make_spec
 
 
 def _touch(path: str) -> str:
     return f"diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1,2 @@\n+x = 1\n"
-
-
-def _spec(**over: Any) -> FeatureSpec:
-    kw: dict[str, Any] = {
-        "task": "click-echo-uppercase",
-        "instruction": INSTRUCTION,
-        "reference_diff": DIFF,
-        "feature_tests": FEATURE_TESTS,
-        "f2p": (
-            "tests/test_echo_uppercase.py::test_req1_uppercases",
-            "tests/test_echo_uppercase.py::test_req2_runner",
-        ),
-        "requirements": (
-            Requirement("REQ-1", "echo uppercases", ("tests/test_echo_uppercase.py::test_req1_uppercases",)),
-            Requirement("REQ-2", "CliRunner sees it", ("tests/test_echo_uppercase.py::test_req2_runner",)),
-        ),
-        "category": "api_cli",
-        "difficulty": "L2",
-    }
-    kw.update(over)
-    return FeatureSpec(**kw)
 
 
 def test_valid_spec_survives_json_roundtrip() -> None:
