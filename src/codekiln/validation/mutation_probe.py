@@ -14,7 +14,7 @@ from typing import Literal, cast
 
 from codekiln.validation import harbor_runner
 
-Kind = Literal["nop", "stub", "partial", "semantic"]
+Kind = Literal["nop", "stub", "partial", "semantic", "adversarial"]
 ProbeRun = Callable[[Path, Path], float | None]  # (swapped task dir, -o dir) -> reward
 
 _NOOP = (
@@ -27,7 +27,7 @@ _NOOP = (
 )
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
 _DEF_RE = re.compile(r"^\+(\s*)(?:async\s+)?def\s+(\w+)\(")
-_KINDS: tuple[Kind, ...] = ("nop", "stub", "partial", "semantic")
+_KINDS: tuple[Kind, ...] = ("nop", "stub", "partial", "semantic", "adversarial")
 _SEMANTIC = (
     ("flip-true", "True", "False"),
     ("flip-false", "False", "True"),
@@ -113,14 +113,16 @@ def probe_package(
     work: Path,
     run: ProbeRun | None = None,
     threshold: float = 0.8,
+    extra_mutants: tuple[Mutant, ...] = (),
 ) -> Dossier:
-    """Run every mutant against a copy of TASK and record the kill rate."""
+    """Run every mutant (including model-written ones) against a copy of TASK."""
     diff_file = task / "solution" / "reference.diff"
     if not diff_file.is_file() or not (task / "task.toml").is_file():
         raise ProbeError(f"{task} is not a Harbor task package")
     runner = run or harbor_probe
     results: list[ProbeResult] = []
-    for m in build_mutants(diff_file.read_text(encoding="utf-8")):
+    mutants = [*build_mutants(diff_file.read_text(encoding="utf-8")), *extra_mutants]
+    for m in mutants:
         dst = work / task.name / m.name
         if dst.exists():
             shutil.rmtree(dst)
@@ -186,6 +188,11 @@ def _dossier(task: str, probes: tuple[ProbeResult, ...], threshold: float) -> Do
         fixed = [p for p in probes if p.kind == kind]
         if not fixed or not all(p.killed for p in fixed):
             reasons.append(f"{kind} mutant survived")
+    # A model-written mutant is deliberately plausible but wrong: a survivor is a real test gap.
+    adversarial = [p for p in probes if p.kind == "adversarial"]
+    if adversarial and not all(p.killed for p in adversarial):
+        names = [p.name for p in adversarial if not p.killed]
+        reasons.append(f"adversarial mutant survived: {names}")
     if len(semantic) < 3:
         reasons.append(f"only {len(semantic)} semantic mutants could be built (need >= 3)")
     if rate < threshold:

@@ -340,16 +340,72 @@ def probe(
     work: Path = Path("runs/probes"),
     out: Path | None = None,
     threshold: float | None = None,
+    adversarial: int = typer.Option(0, min=0),
+    run_id: int | None = None,
+    ledger_csv: Path | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
 ) -> None:
-    """Run four-class mutation probes on PACKAGE and write mutation_dossier.json."""
-    from codekiln.config import Settings
-    from codekiln.validation.mutation_probe import probe_package, write_dossier
+    """Run mutation probes on PACKAGE; --adversarial N adds model-written wrong solutions."""
+    from codekiln.billing.ledger import BillingLedger, Budget, BudgetExceeded, Pricing
+    from codekiln.synthesis.llm_router import ModelConfig, RouterError, http_post
+    from codekiln.validation import adversarial as adv
+    from codekiln.validation.mutation_probe import Mutant, probe_package, write_dossier
+    from codekiln.validation.verify import find_candidate
+
+    settings = Settings()
+    extra: tuple[Mutant, ...] = ()
+    if adversarial:
+        if run_id is None:
+            typer.echo("--run-id is required when --adversarial is used (for metering)", err=True)
+            raise typer.Exit(2)
+        db = Path(settings.db_path)
+        if not db.exists():
+            typer.echo(f"No ledger at {db}. Run `codekiln run <repo>` first.", err=True)
+            raise typer.Exit(2)
+        try:
+            config = ModelConfig(
+                base_url=base_url or settings.llm_base_url, api_key=settings.llm_api_key,
+                model=model or settings.llm_model,
+            )
+        except RouterError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(2) from e
+        pricing = Pricing(settings.llm_input_usd_per_1k, settings.llm_output_usd_per_1k)
+        bills = BillingLedger(ledger_csv or Path(settings.billing_ledger), pricing)
+        budget = Budget(
+            bills, run_id, settings.max_budget_usd, config.model, pricing
+        )
+        con = connect(str(db))
+        try:
+            budget.start_candidate(find_candidate(con, package) or 0)
+        finally:
+            con.close()
+        writer = adv.LLMAdversarialWriter(config, post=budget.meter_post(http_post))
+        try:
+            budget.guard()
+            mutants, rejected = adv.propose_mutants(
+                (package / "instruction.md").read_text(encoding="utf-8"),
+                (package / "solution" / "reference.diff").read_text(encoding="utf-8"),
+                writer, n=adversarial,
+            )
+        except BudgetExceeded as e:
+            typer.echo(f"stopped: BUDGET_EXCEEDED: {e}", err=True)
+            raise typer.Exit(1) from e
+        except (adv.AdversarialError, OSError) as e:
+            typer.echo(f"adversarial proposal failed: {e}", err=True)
+            raise typer.Exit(2) from e
+        adv.report_rejected(rejected, work / package.name / "adversarial_rejected.json")
+        extra = tuple(mutants)
+        for reason in rejected:
+            typer.echo(f"  skipped mutant: {reason}", err=True)
 
     try:
         d = probe_package(
             package,
             work,
-            threshold=Settings().mutant_kill_threshold if threshold is None else threshold,
+            threshold=settings.mutant_kill_threshold if threshold is None else threshold,
+            extra_mutants=extra,
         )
     except (OSError, ValueError) as e:
         typer.echo(f"probe failed: {e}", err=True)
