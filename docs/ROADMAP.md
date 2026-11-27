@@ -1,6 +1,6 @@
 # Roadmap
 
-Prototype deadline **Dec 6, 2026, 11:55 PM IST**; finale **Dec 20, 2026** (New Delhi). Each checkbox = one PR. Owner tags: **[L]** Lok Trishal, **[S]** Sanjjith B, **[H]** Harsha, **[C]** Cholan. See the README for the team table and hand-offs.
+Prototype deadline **Dec 6, 2026, 11:55 PM IST**; finale **Dec 20, 2026** (New Delhi). Each checkbox = one PR. Owner tags: **[L]** Loktrishal K, **[S]** Sanjjith B, **[H]** Harshavardhan K, **[C]** Cholan Abhaynadh Kinnera. See the README for the team table and hand-offs.
 
 ## Course correction (Nov 27, from the official Participant Guide)
 
