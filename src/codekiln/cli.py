@@ -40,6 +40,77 @@ def run(
     typer.echo(f"next: codekiln synth {s.run_id}  (gates and packaging still pending)")
 
 
+@app.command()
+def factory(
+    repo: str | None = typer.Argument(None, help="Git URL, directory or zip to plan from (new run)."),
+    run_id: int | None = typer.Option(None, help="Resume an existing run instead of planning."),
+    slots: int = typer.Option(6, min=1),
+    workdir: Path = Path("workspaces"),
+    work: Path = Path("runs/factory"),
+    dest: Path = Path("packages"),
+    db: Path | None = None,
+    model: str | None = None,
+    base_url: str | None = None,
+    max_budget_usd: float | None = None,
+    ledger_csv: Path | None = None,
+    runs: int = typer.Option(3, min=1),
+) -> None:
+    """Plan (or resume) a run, then drive every candidate through every gate to a package.
+
+    Harbor and Docker must be installed. Re-running with --run-id resumes from the ledger.
+    """
+    from codekiln.billing.ledger import BillingLedger, Budget, Pricing
+    from codekiln.factory import run_factory
+    from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError, http_post
+
+    if (repo is None) == (run_id is None):
+        typer.echo("give exactly one of REPO (new run) or --run-id (resume)", err=True)
+        raise typer.Exit(2)
+    settings = Settings()
+    ledger = db or Path(settings.db_path)
+    con = connect(str(ledger))
+    if repo is not None:
+        try:
+            s = run_pipeline(repo, slots, con, workdir)
+        except IngestionError as e:
+            typer.echo(f"ingestion failed: {e}", err=True)
+            raise typer.Exit(1) from e
+        run_id = s.run_id
+        typer.echo(f"run {run_id}: planned {s.new + s.existing} candidates at {s.base_commit[:12]}")
+    assert run_id is not None
+    try:
+        config = ModelConfig(
+            base_url=base_url or settings.llm_base_url, api_key=settings.llm_api_key,
+            model=model or settings.llm_model,
+        )
+    except RouterError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
+    pricing = Pricing(settings.llm_input_usd_per_1k, settings.llm_output_usd_per_1k)
+    bills = BillingLedger(ledger_csv or Path(settings.billing_ledger), pricing)
+    budget = Budget(
+        bills, run_id, settings.max_budget_usd if max_budget_usd is None else max_budget_usd,
+        config.model, pricing,
+    )
+    result = run_factory(
+        con, run_id, writer=LLMWriter(config, post=budget.meter_post(http_post)),
+        staging=work / "staging", dest=dest, work=work, db=ledger, budget=budget,
+        runs=runs, model=config.model,
+    )
+    typer.echo(
+        f"run {run_id}: {len(result.packaged)} packaged, {len(result.rejected)} rejected,"
+        f" {result.unfinished} unfinished, ${bills.spent(run_id):.4f} spent"
+    )
+    for name in result.packaged:
+        typer.echo(f"  packaged {dest / name}")
+    for name, reason in result.rejected.items():
+        typer.echo(f"  rejected {name}: {reason}", err=True)
+    if result.stopped:
+        typer.echo(f"  stopped: {result.stopped}", err=True)
+    if not result.packaged or result.stopped:
+        raise typer.Exit(1)
+
+
 class _SynthResult(Protocol):
     synthesized: int
     failed: int
