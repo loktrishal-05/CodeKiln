@@ -107,6 +107,40 @@ def blind_read(package: Path, out: Path | None = None) -> None:
 
 
 @app.command()
+def probe(
+    package: Path,
+    work: Path = Path("runs/probes"),
+    out: Path | None = None,
+    threshold: float | None = None,
+) -> None:
+    """Run four-class mutation probes on PACKAGE and write mutation_dossier.json."""
+    from codekiln.config import Settings
+    from codekiln.validation.mutation_probe import probe_package, write_dossier
+
+    try:
+        d = probe_package(
+            package,
+            work,
+            threshold=Settings().mutant_kill_threshold if threshold is None else threshold,
+        )
+    except (OSError, ValueError) as e:
+        typer.echo(f"probe failed: {e}", err=True)
+        raise typer.Exit(2) from e
+    dst = out or package / "mutation_dossier.json"
+    write_dossier(dst, d)
+    typer.echo(
+        f"{package.name}: {len(d.probes)} probes, semantic kill {d.semantic_kill_rate:.0%}"
+        f" (min {d.threshold:.0%}) -> {dst}"
+    )
+    for p in d.probes:
+        typer.echo(f"  {p.name:>20} {'killed' if p.killed else 'SURVIVED'} reward={p.reward}")
+    if not d.ok:
+        for reason in d.reasons:
+            typer.echo(f"  FAIL: {reason}", err=True)
+        raise typer.Exit(1)
+
+
+@app.command()
 def verify(package: str) -> None:
     """Re-run the 3-state gate on a generated PACKAGE."""
     _todo("verify")

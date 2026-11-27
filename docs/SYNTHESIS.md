@@ -5,9 +5,9 @@ The synthesizer's whole job is to turn one `Plan` into one `FeatureSpec`. Everyt
 the shape is fixed here before the LLM router lands. This page is the contract Cholan and Harsha
 wire against; `src/codekiln/synthesis/models.py` is the executable version.
 
-Status: **blind reader wired** — contract, RTM gate, package emitter, provider router, the
-pipeline stage (`DIVERSITY_OK -> BLIND_READER_OK`) and the dry-run instruction linter are in.
-Mutation probes and the eval runner are next.
+Status: **probes wired** — contract, RTM gate, package emitter, provider router, the pipeline
+stage (`DIVERSITY_OK -> BLIND_READER_OK`), the dry-run instruction linter and four-class mutation
+probes are in. Cost ledger/resume and the eval runner are next.
 
 ## What consumes what
 
@@ -17,7 +17,7 @@ Mutation probes and the eval runner are next.
 | 3-state gate (`validation/gate_runner.py`) | `tests/fail_to_pass.json` | task dir |
 | RTM gate | `rtm_map.json` | task dir root |
 | Dashboard (`evaluation/report_builder.py`) | `mutation_kill_rate`, `nop_rewards`, `oracle_rewards` | ledger |
-| Mutation probes (next) | `solution/reference.diff` with a swapped `solution/` | task dir |
+| Mutation probes (`validation/mutation_probe.py`) | `solution/reference.diff` with a swapped `solution/` | task dir -> `mutation_dossier.json` |
 
 ## The object
 
@@ -103,7 +103,7 @@ codekiln synth RUN_ID --packages packages      # writes one Harbor package per c
 | `synthesis/emit.py` | `write_package`: validate + RTM + `packaging.harbor.write_task` |
 | `synthesis/spec_generator.py` | deterministic contract-first prompt for the writer |
 | `synthesis/llm_router.py` | OpenAI-compatible client, JSON parsing, bounded repair |
-| `synthesis/runner.py` | `DIVERSITY_OK -> SYNTHESIZED` / `REJECTED`, spec hash, dead-letter |
+| `synthesis/runner.py` | `DIVERSITY_OK -> BLIND_READER_OK` / `REJECTED`, spec hash, dead-letter |
 | `planner/models.py` | `dump_plan` / `load_plan` for fresh-process resume |
 
 ## Provider
@@ -115,9 +115,8 @@ rejection reason appended; it never records its own success.
 
 ## Next (in order)
 
-1. Mutation probes: four classes, each a Harbor trial with a swapped `solution/`, >=80% semantic kill.
-3. Cost ledger, budget breaker and idempotent resume.
-4. Blind eval runner + `eval_receipt.json` (2+ models).
+1. Cost ledger, budget breaker and idempotent resume.
+2. Blind eval runner + `eval_receipt.json` (2+ models).
 
 ## Team asks
 
