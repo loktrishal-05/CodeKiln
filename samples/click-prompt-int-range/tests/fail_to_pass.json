@@ -1,0 +1,5 @@
+[
+ "tests/test_prompt_int_range.py::test_inconsistent_bounds_raises",
+ "tests/test_prompt_int_range.py::test_valid_within_bounds",
+ "tests/test_prompt_int_range.py::test_value_below_min_raises"
+]

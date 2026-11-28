@@ -1,0 +1,23 @@
+{
+  "task": "click-parse-bool",
+  "ok": true,
+  "requirements": {
+    "REQ-1": [
+      "tests/test_parse_bool.py::test_string_truthy_and_falsy"
+    ],
+    "REQ-2": [
+      "tests/test_parse_bool.py::test_none_returns_default",
+      "tests/test_parse_bool.py::test_none_uses_default_when_omitted"
+    ],
+    "REQ-3": [
+      "tests/test_parse_bool.py::test_bool_passthrough"
+    ],
+    "REQ-4": [
+      "tests/test_parse_bool.py::test_invalid_string_raises"
+    ],
+    "REQ-5": [
+      "tests/test_parse_bool.py::test_invalid_type_raises"
+    ]
+  },
+  "problems": []
+}

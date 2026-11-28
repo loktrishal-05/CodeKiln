@@ -1,0 +1,56 @@
+diff --git a/src/click/testing.py b/src/click/testing.py
+--- a/src/click/testing.py
++++ b/src/click/testing.py
+@@ -312,6 +312,52 @@
+     def __repr__(self) -> str:
+         exc_str = repr(self.exception) if self.exception else "okay"
+         return f"<{type(self).__name__} {exc_str}>"
++
++
++    def output_contains(self, substring: str | t.Sequence[str], case_sensitive: bool = True) -> bool:
++        """Return ``True`` if *substring* (or any of its elements) is present in the result output.
++
++        Parameters
++        ----------
++        substring: str or sequence of str
++            The text or texts to search for.
++        case_sensitive: bool, default ``True``
++            If ``False``, the search is performed case‑insensitively.
++
++        Raises
++        ------
++        TypeError
++            If *substring* is neither a string nor a sequence of strings, or if
++            *case_sensitive* is not a ``bool``.
++        """
++        import typing as t
++        # Validate case_sensitive first
++        if not isinstance(case_sensitive, bool):
++            raise TypeError("case_sensitive must be a bool")
++
++        # Get the output string
++        output = self.output()
++        if not case_sensitive:
++            output = output.lower()
++
++        def _matches(pattern: str) -> bool:
++            if not case_sensitive:
++                pattern = pattern.lower()
++            return pattern in output
++
++        # Determine how to handle substring
++        if isinstance(substring, str):
++            return _matches(substring)
++        elif isinstance(substring, (list, tuple, set)):
++            # Ensure every element is a string
++            for item in substring:
++                if not isinstance(item, str):
++                    raise TypeError("all items in substring sequence must be strings")
++            # Return True if any element matches
++            return any(_matches(item) for item in substring)
++        else:
++            raise TypeError("substring must be a string or a sequence of strings")
++
+ 
+ 
+ class CliRunner:

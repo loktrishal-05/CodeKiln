@@ -1,0 +1,15 @@
+{
+ "agent": "oracle",
+ "reward": "1.0",
+ "fail_to_pass": {
+  "tests/test_result_output_contains.py::test_contains_case_insensitive": "passed",
+  "tests/test_result_output_contains.py::test_contains_case_sensitive_true": "passed",
+  "tests/test_result_output_contains.py::test_contains_iterable_false": "passed",
+  "tests/test_result_output_contains.py::test_contains_iterable_true": "passed",
+  "tests/test_result_output_contains.py::test_invalid_case_sensitive_type": "passed",
+  "tests/test_result_output_contains.py::test_invalid_substring_type": "passed",
+  "tests/test_result_output_contains.py::test_iterable_with_non_string_item": "passed"
+ },
+ "pass_to_pass_total": 2435,
+ "pass_to_pass_passed": 2434
+}

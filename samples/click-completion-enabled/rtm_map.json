@@ -1,0 +1,19 @@
+{
+  "task": "click-completion-enabled",
+  "ok": true,
+  "requirements": {
+    "REQ-1": [
+      "tests/test_completion_enabled.py::test_not_set"
+    ],
+    "REQ-2": [
+      "tests/test_completion_enabled.py::test_false_values"
+    ],
+    "REQ-3": [
+      "tests/test_completion_enabled.py::test_true_values"
+    ],
+    "REQ-4": [
+      "tests/test_completion_enabled.py::test_invalid_value"
+    ]
+  },
+  "problems": []
+}

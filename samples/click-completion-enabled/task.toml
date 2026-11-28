@@ -1,0 +1,19 @@
+schema_version = "1.4"
+
+[metadata]
+repo = "https://github.com/pallets/click"
+base_commit = "cf19179e8e2fd54c601378cec9e0d21bb12b6fb1"
+license = "BSD-3-Clause"
+category = "core_logic"
+difficulty = "L2"
+generator = "codekiln"
+
+[verifier]
+timeout_sec = 900.0
+
+[agent]
+timeout_sec = 1800.0
+
+[environment]
+network_mode = "no-network"
+build_timeout_sec = 900.0

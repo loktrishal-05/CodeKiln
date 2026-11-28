@@ -1,0 +1,14 @@
+{
+ "agent": "oracle",
+ "reward": "1.0",
+ "fail_to_pass": {
+  "tests/test_parse_bool.py::test_bool_passthrough": "passed",
+  "tests/test_parse_bool.py::test_invalid_string_raises": "passed",
+  "tests/test_parse_bool.py::test_invalid_type_raises": "passed",
+  "tests/test_parse_bool.py::test_none_returns_default": "passed",
+  "tests/test_parse_bool.py::test_none_uses_default_when_omitted": "passed",
+  "tests/test_parse_bool.py::test_string_truthy_and_falsy": "passed"
+ },
+ "pass_to_pass_total": 2435,
+ "pass_to_pass_passed": 2434
+}

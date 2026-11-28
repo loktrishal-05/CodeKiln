@@ -1,0 +1,36 @@
+diff --git a/src/click/utils.py b/src/click/utils.py
+--- a/src/click/utils.py
++++ b/src/click/utils.py
+@@ -332,6 +332,32 @@
+ 
+     file.write(out)  # type: ignore
+     file.flush()
++
++
++def parse_bool(value: str | bool | None, *, default: bool = False) -> bool:
++    """Parse *value* into a boolean.
++
++    * ``None`` returns ``default``.
++    * ``bool`` values are returned unchanged.
++    * ``str`` values are stripped, lower‑cased and matched against common truthy
++      ("1", "true", "yes", "on") and falsy ("0", "false", "no", "off")
++      representations.
++    * Any other string raises ``ValueError``.
++    * Any non‑string, non‑bool, non‑None type also raises ``ValueError``.
++    """
++    if value is None:
++        return default
++    if isinstance(value, bool):
++        return value
++    if isinstance(value, str):
++        lowered = value.strip().lower()
++        if lowered in {"1", "true", "yes", "on"}:
++            return True
++        if lowered in {"0", "false", "no", "off"}:
++            return False
++        raise ValueError(f"Invalid boolean value: {value!r}")
++    raise ValueError(f"Invalid type for boolean parsing: {type(value).__name__}")
++
+ 
+ 
+ def _get_binary_stream(name: t.Literal["stdin", "stdout", "stderr"]) -> t.BinaryIO:

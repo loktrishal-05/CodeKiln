@@ -1,0 +1,45 @@
+{
+  "task": "click-parse-json-param",
+  "ok": true,
+  "semantic_kill_rate": 1.0,
+  "threshold": 0.8,
+  "reasons": [],
+  "probes": [
+    {
+      "name": "noop",
+      "kind": "nop",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "stub",
+      "kind": "stub",
+      "killed": true,
+      "reward": 0.3333333333333333
+    },
+    {
+      "name": "partial",
+      "kind": "partial",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "semantic-flip-eq",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "semantic-flip-or",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.6666666666666666
+    },
+    {
+      "name": "semantic-rename-def",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.0
+    }
+  ]
+}

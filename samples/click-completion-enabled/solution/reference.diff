@@ -1,0 +1,35 @@
+diff --git a/src/click/shell_completion.py b/src/click/shell_completion.py
+--- a/src/click/shell_completion.py
++++ b/src/click/shell_completion.py
+@@ -385,6 +385,31 @@
+         return "\n".join(out)
+ 
+ 
++def completion_enabled() -> bool:
++    """Return ``True`` if shell completion is enabled.
++
++    The decision is based on the ``CLICK_COMPLETION_DISABLED`` environment
++    variable:
++
++    * If the variable is **not set**, completion is considered enabled.
++    * If set to ``"0"`` or ``"false"`` (case‑insensitive), completion is disabled.
++    * If set to ``"1"`` or ``"true"`` (case‑insensitive), completion is enabled.
++    * Any other value results in a ``ValueError``.
++    """
++    import os
++
++    var = os.getenv("CLICK_COMPLETION_DISABLED")
++    if var is None:
++        return True
++    lowered = var.lower()
++    if lowered in ("0", "false"):
++        return False
++    if lowered in ("1", "true"):
++        return True
++    raise ValueError(f"Invalid value for CLICK_COMPLETION_DISABLED: {var!r}")
++
++
++
+ class BashComplete(ShellComplete):
+     """Shell completion for Bash."""
+ 

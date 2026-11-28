@@ -1,0 +1,14 @@
+{
+  "task": "click-parse-json-param",
+  "ok": true,
+  "checks": {
+    "single_commit_snapshot": true,
+    "editable_install": true,
+    "no_site_packages_leak": true,
+    "no_network": true,
+    "diff_policy": true,
+    "canary": true,
+    "secret_scan": true
+  },
+  "reasons": []
+}

@@ -1,0 +1,6 @@
+[
+ "tests/test_completion_enabled.py::test_false_values",
+ "tests/test_completion_enabled.py::test_invalid_value",
+ "tests/test_completion_enabled.py::test_not_set",
+ "tests/test_completion_enabled.py::test_true_values"
+]
