@@ -1,0 +1,38 @@
+diff --git a/src/click/__init__.py b/src/click/__init__.py
+--- a/src/click/__init__.py
++++ b/src/click/__init__.py
+@@ -71,6 +71,7 @@
+ from .utils import format_filename as format_filename
+ from .utils import get_app_dir as get_app_dir
+ from .utils import open_file as open_file
++from .core import parse_json_param
+ 
+ 
+ def __getattr__(name: str) -> object:
+diff --git a/src/click/core.py b/src/click/core.py
+--- a/src/click/core.py
++++ b/src/click/core.py
+@@ -123,6 +123,23 @@
+ 
+ def batch(iterable: cabc.Iterable[V], batch_size: int) -> list[tuple[V, ...]]:
+     return list(zip(*repeat(iter(iterable), batch_size), strict=False))
++
++
++def parse_json_param(value: str):
++    """Parse a JSON string into a Python object.
++
++    * Returns ``None`` for an empty string.
++    * Raises :class:`click.exceptions.BadParameter` if the string is not valid JSON.
++    """
++    if value is None or value == "":
++        return None
++    import json
++    try:
++        return json.loads(value)
++    except json.JSONDecodeError as exc:
++        from .exceptions import BadParameter
++        raise BadParameter(f"Invalid JSON: {exc.msg}") from exc
++
+ 
+ 
+ @contextmanager

@@ -1,0 +1,24 @@
+{
+  "task": "click-result-contains",
+  "ok": true,
+  "requirements": {
+    "REQ-1": [
+      "tests/test_result_output_contains.py::test_contains_case_sensitive_true",
+      "tests/test_result_output_contains.py::test_contains_case_insensitive",
+      "tests/test_result_output_contains.py::test_contains_iterable_true",
+      "tests/test_result_output_contains.py::test_contains_iterable_false"
+    ],
+    "REQ-2": [
+      "tests/test_result_output_contains.py::test_invalid_substring_type",
+      "tests/test_result_output_contains.py::test_iterable_with_non_string_item"
+    ],
+    "REQ-3": [
+      "tests/test_result_output_contains.py::test_invalid_case_sensitive_type"
+    ],
+    "REQ-4": [
+      "tests/test_result_output_contains.py::test_contains_iterable_true",
+      "tests/test_result_output_contains.py::test_contains_iterable_false"
+    ]
+  },
+  "problems": []
+}

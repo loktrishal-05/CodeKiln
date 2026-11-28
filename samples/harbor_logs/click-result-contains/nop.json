@@ -1,0 +1,15 @@
+{
+ "agent": "nop",
+ "reward": "0.0",
+ "fail_to_pass": {
+  "tests/test_result_output_contains.py::test_contains_case_insensitive": "failed",
+  "tests/test_result_output_contains.py::test_contains_case_sensitive_true": "failed",
+  "tests/test_result_output_contains.py::test_contains_iterable_false": "failed",
+  "tests/test_result_output_contains.py::test_contains_iterable_true": "failed",
+  "tests/test_result_output_contains.py::test_invalid_case_sensitive_type": "failed",
+  "tests/test_result_output_contains.py::test_invalid_substring_type": "failed",
+  "tests/test_result_output_contains.py::test_iterable_with_non_string_item": "failed"
+ },
+ "pass_to_pass_total": 2435,
+ "pass_to_pass_passed": 2434
+}

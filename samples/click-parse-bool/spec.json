@@ -1,0 +1,56 @@
+{
+ "task": "click-parse-bool",
+ "category": "core_logic",
+ "difficulty": "L2",
+ "instruction": "# Boolean parsing helper\n\n## Requirements\n- REQ-1: `click.utils.parse_bool(value: str | bool | None, *, default: bool = False) -> bool` returns a boolean for common truthy/falsy strings.\n- REQ-2: When `value` is ``None`` the function returns the provided ``default``.\n- REQ-3: When `value` is already a ``bool`` it is returned unchanged.\n- REQ-4: When `value` is a string that does not match any known truthy or falsy representation a ``ValueError`` is raised.\n- REQ-5: When `value` is of any other type a ``ValueError`` is raised.\n\n## Errors\n- ``ValueError`` if the string cannot be interpreted as a boolean or if the type is unsupported.\n",
+ "reference_diff": "diff --git a/src/click/utils.py b/src/click/utils.py\n--- a/src/click/utils.py\n+++ b/src/click/utils.py\n@@ -332,6 +332,32 @@\n \n     file.write(out)  # type: ignore\n     file.flush()\n+\n+\n+def parse_bool(value: str | bool | None, *, default: bool = False) -> bool:\n+    \"\"\"Parse *value* into a boolean.\n+\n+    * ``None`` returns ``default``.\n+    * ``bool`` values are returned unchanged.\n+    * ``str`` values are stripped, lower\u2011cased and matched against common truthy\n+      (\"1\", \"true\", \"yes\", \"on\") and falsy (\"0\", \"false\", \"no\", \"off\")\n+      representations.\n+    * Any other string raises ``ValueError``.\n+    * Any non\u2011string, non\u2011bool, non\u2011None type also raises ``ValueError``.\n+    \"\"\"\n+    if value is None:\n+        return default\n+    if isinstance(value, bool):\n+        return value\n+    if isinstance(value, str):\n+        lowered = value.strip().lower()\n+        if lowered in {\"1\", \"true\", \"yes\", \"on\"}:\n+            return True\n+        if lowered in {\"0\", \"false\", \"no\", \"off\"}:\n+            return False\n+        raise ValueError(f\"Invalid boolean value: {value!r}\")\n+    raise ValueError(f\"Invalid type for boolean parsing: {type(value).__name__}\")\n+\n \n \n def _get_binary_stream(name: t.Literal[\"stdin\", \"stdout\", \"stderr\"]) -> t.BinaryIO:\n",
+ "feature_tests": {
+  "test_parse_bool.py": "import pytest\nfrom click.utils import parse_bool\n\ndef test_none_returns_default():\n    assert parse_bool(None, default=True) is True\n    assert parse_bool(None, default=False) is False\n\ndef test_none_uses_default_when_omitted():\n    # default is False when not provided\n    assert parse_bool(None) is False\n\ndef test_bool_passthrough():\n    assert parse_bool(True) is True\n    assert parse_bool(False) is False\n\ndef test_string_truthy_and_falsy():\n    truthy = [\"1\", \"TRUE\", \"Yes\", \" on \"]\n    falsy = [\"0\", \"false\", \"No\", \"OFF\"]\n    for val in truthy:\n        assert parse_bool(val) is True\n    for val in falsy:\n        assert parse_bool(val) is False\n\ndef test_invalid_string_raises():\n    for bad in [\"maybe\", \"123\", \"\", \"   \"]:\n        with pytest.raises(ValueError):\n            parse_bool(bad)\n\ndef test_invalid_type_raises():\n    for bad in [42, [\"true\"], b\"true\"]:\n        with pytest.raises(ValueError):\n            parse_bool(bad)\n"
+ },
+ "f2p": [
+  "tests/test_parse_bool.py::test_none_returns_default",
+  "tests/test_parse_bool.py::test_none_uses_default_when_omitted",
+  "tests/test_parse_bool.py::test_bool_passthrough",
+  "tests/test_parse_bool.py::test_string_truthy_and_falsy",
+  "tests/test_parse_bool.py::test_invalid_string_raises",
+  "tests/test_parse_bool.py::test_invalid_type_raises"
+ ],
+ "requirements": [
+  {
+   "id": "REQ-1",
+   "statement": "parse_bool returns a boolean for common truthy/falsy strings",
+   "tests": [
+    "tests/test_parse_bool.py::test_string_truthy_and_falsy"
+   ]
+  },
+  {
+   "id": "REQ-2",
+   "statement": "parse_bool returns the default when value is None",
+   "tests": [
+    "tests/test_parse_bool.py::test_none_returns_default",
+    "tests/test_parse_bool.py::test_none_uses_default_when_omitted"
+   ]
+  },
+  {
+   "id": "REQ-3",
+   "statement": "parse_bool returns the bool unchanged when value is a bool",
+   "tests": [
+    "tests/test_parse_bool.py::test_bool_passthrough"
+   ]
+  },
+  {
+   "id": "REQ-4",
+   "statement": "parse_bool raises ValueError for unrecognised strings",
+   "tests": [
+    "tests/test_parse_bool.py::test_invalid_string_raises"
+   ]
+  },
+  {
+   "id": "REQ-5",
+   "statement": "parse_bool raises ValueError for unsupported types",
+   "tests": [
+    "tests/test_parse_bool.py::test_invalid_type_raises"
+   ]
+  }
+ ]
+}

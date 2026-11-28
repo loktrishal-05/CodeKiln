@@ -1,0 +1,38 @@
+{
+ "task": "click-prompt-int-range",
+ "category": "api_cli",
+ "difficulty": "L2",
+ "instruction": "# Integer range prompt\n\n## Requirements\n- REQ-1: `click.termui.prompt_int_range(text: str, min: int | None = None, max: int | None = None, default: int | None = None, hide_input: bool = False, err: bool = False) -> int` prompts the user for an integer and returns it.\n- REQ-2: If `min` is greater than `max` a `ValueError` is raised before prompting.\n- REQ-3: If the entered value is lower than `min` a `ValueError` is raised.\n\n## Errors\n- `ValueError` when bounds are inconsistent or the result is out of range.\n",
+ "reference_diff": "diff --git a/src/click/termui.py b/src/click/termui.py\n--- a/src/click/termui.py\n+++ b/src/click/termui.py\n@@ -284,6 +284,67 @@\n         if value == value2:\n             return result\n         echo(_(\"Error: The two entered values do not match.\"), err=err)\n+\n+\n+def prompt_int_range(\n+    text: str,\n+    min: int | None = None,\n+    max: int | None = None,\n+    default: int | None = None,\n+    hide_input: bool = False,\n+    err: bool = False,\n+) -> int:\n+    \"\"\"Prompt for an integer within optional inclusive bounds.\n+\n+    Parameters\n+    ----------\n+    text:\n+        The prompt text.\n+    min:\n+        Inclusive lower bound, or ``None`` for no lower bound.\n+    max:\n+        Inclusive upper bound, or ``None`` for no upper bound.\n+    default:\n+        Default value used when the user enters nothing.\n+    hide_input:\n+        If ``True`` the input will not be echoed (useful for passwords).\n+    err:\n+        If ``True`` the prompt is written to ``stderr`` instead of ``stdout``.\n+\n+    Returns\n+    -------\n+    int\n+        The integer entered by the user.\n+\n+    Raises\n+    ------\n+    ValueError\n+        If ``min`` is greater than ``max`` or the entered value is outside the\n+        specified bounds.\n+    \"\"\"\n+    # Decision 1: inconsistent bounds\n+    if (min is not None) and (max is not None) and (min > max):\n+        raise ValueError(\"min cannot be greater than max\")\n+\n+    # Use the existing ``prompt`` helper to get an integer from the user.\n+    value = prompt(\n+        text,\n+        default=default,\n+        hide_input=hide_input,\n+        type=int,\n+        err=err,\n+    )\n+\n+    # Decision 2: below lower bound\n+    if (min is not None) and (value < min):\n+        raise ValueError(f\"Value {value} is less than minimum {min}\")\n+\n+    # Decision 3: above upper bound\n+    if (max is not None) and (value > max):\n+        raise ValueError(f\"Value {value} is greater than maximum {max}\")\n+\n+    return value\n+\n \n \n def confirm(\n",
+ "feature_tests": {
+  "test_prompt_int_range.py": "import pytest\nfrom click import termui\n\ndef test_valid_within_bounds(monkeypatch):\n    # Simulate user entering 5\n    monkeypatch.setattr(termui, \"prompt\", lambda *args, **kwargs: 5)\n    assert termui.prompt_int_range(\"Enter a number\", min=1, max=10) == 5\n\ndef test_value_below_min_raises(monkeypatch):\n    monkeypatch.setattr(termui, \"prompt\", lambda *args, **kwargs: 0)\n    with pytest.raises(ValueError) as exc:\n        termui.prompt_int_range(\"Enter\", min=1, max=10)\n    assert \"less than minimum\" in str(exc.value)\n\ndef test_inconsistent_bounds_raises(monkeypatch):\n    # Ensure prompt is never called when bounds are inconsistent\n    called = False\n    def fake_prompt(*args, **kwargs):\n        nonlocal called\n        called = True\n        return 5\n    monkeypatch.setattr(termui, \"prompt\", fake_prompt)\n    with pytest.raises(ValueError) as exc:\n        termui.prompt_int_range(\"Enter\", min=10, max=5)\n    assert \"min cannot be greater than max\" in str(exc.value)\n    assert not called\n"
+ },
+ "f2p": [
+  "tests/test_prompt_int_range.py::test_valid_within_bounds",
+  "tests/test_prompt_int_range.py::test_value_below_min_raises",
+  "tests/test_prompt_int_range.py::test_inconsistent_bounds_raises"
+ ],
+ "requirements": [
+  {
+   "id": "REQ-1",
+   "statement": "prompt_int_range returns the entered integer when it satisfies bounds",
+   "tests": [
+    "tests/test_prompt_int_range.py::test_valid_within_bounds"
+   ]
+  },
+  {
+   "id": "REQ-2",
+   "statement": "prompt_int_range raises ValueError when min > max",
+   "tests": [
+    "tests/test_prompt_int_range.py::test_inconsistent_bounds_raises"
+   ]
+  },
+  {
+   "id": "REQ-3",
+   "statement": "prompt_int_range raises ValueError when entered value is below min",
+   "tests": [
+    "tests/test_prompt_int_range.py::test_value_below_min_raises"
+   ]
+  }
+ ]
+}

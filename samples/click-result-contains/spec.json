@@ -1,0 +1,54 @@
+{
+ "task": "click-result-contains",
+ "category": "api_testing",
+ "difficulty": "L2",
+ "instruction": "# Result output containment helper\n\n## Requirements\n- REQ-1: `Result.output_contains(substring: str | t.Sequence[str], case_sensitive: bool = True) -> bool` returns ``True`` when ``substring`` (or any element of the sequence) is found in the captured output according to the ``case_sensitive`` flag, otherwise ``False``.\n- REQ-2: ``Result.output_contains`` raises ``TypeError`` if ``substring`` is not a ``str`` nor a sequence of strings.\n- REQ-3: ``Result.output_contains`` raises ``TypeError`` if ``case_sensitive`` is not a ``bool``.\n- REQ-4: When ``substring`` is a sequence, the method returns ``True`` if **any** element matches the output criteria.\n\n## Errors\n- ``TypeError`` for invalid argument types.\n",
+ "reference_diff": "diff --git a/src/click/testing.py b/src/click/testing.py\n--- a/src/click/testing.py\n+++ b/src/click/testing.py\n@@ -312,6 +312,52 @@\n     def __repr__(self) -> str:\n         exc_str = repr(self.exception) if self.exception else \"okay\"\n         return f\"<{type(self).__name__} {exc_str}>\"\n+\n+\n+    def output_contains(self, substring: str | t.Sequence[str], case_sensitive: bool = True) -> bool:\n+        \"\"\"Return ``True`` if *substring* (or any of its elements) is present in the result output.\n+\n+        Parameters\n+        ----------\n+        substring: str or sequence of str\n+            The text or texts to search for.\n+        case_sensitive: bool, default ``True``\n+            If ``False``, the search is performed case\u2011insensitively.\n+\n+        Raises\n+        ------\n+        TypeError\n+            If *substring* is neither a string nor a sequence of strings, or if\n+            *case_sensitive* is not a ``bool``.\n+        \"\"\"\n+        import typing as t\n+        # Validate case_sensitive first\n+        if not isinstance(case_sensitive, bool):\n+            raise TypeError(\"case_sensitive must be a bool\")\n+\n+        # Get the output string\n+        output = self.output()\n+        if not case_sensitive:\n+            output = output.lower()\n+\n+        def _matches(pattern: str) -> bool:\n+            if not case_sensitive:\n+                pattern = pattern.lower()\n+            return pattern in output\n+\n+        # Determine how to handle substring\n+        if isinstance(substring, str):\n+            return _matches(substring)\n+        elif isinstance(substring, (list, tuple, set)):\n+            # Ensure every element is a string\n+            for item in substring:\n+                if not isinstance(item, str):\n+                    raise TypeError(\"all items in substring sequence must be strings\")\n+            # Return True if any element matches\n+            return any(_matches(item) for item in substring)\n+        else:\n+            raise TypeError(\"substring must be a string or a sequence of strings\")\n+\n \n \n class CliRunner:\n",
+ "feature_tests": {
+  "test_result_output_contains.py": "import pytest\nfrom click.testing import Result\n\nclass DummyResult(Result):\n    def __init__(self, output: str):\n        # Bypass the normal constructor; set the internal attributes directly.\n        self._output = output\n        self._stdout = output\n        self._stderr = ''\n        self.exit_code = 0\n        self.exception = None\n    def output(self) -> str:\n        return self._output\n\ndef test_contains_case_sensitive_true():\n    r = DummyResult('Hello World')\n    assert r.output_contains('World') is True\n    assert r.output_contains('world') is False\n\ndef test_contains_case_insensitive():\n    r = DummyResult('Hello World')\n    assert r.output_contains('world', case_sensitive=False) is True\n    assert r.output_contains('WORLD', case_sensitive=False) is True\n\ndef test_invalid_substring_type():\n    r = DummyResult('test')\n    with pytest.raises(TypeError):\n        r.output_contains(123)\n\ndef test_invalid_case_sensitive_type():\n    r = DummyResult('test')\n    with pytest.raises(TypeError):\n        r.output_contains('test', case_sensitive='yes')\n\ndef test_contains_iterable_true():\n    r = DummyResult('alpha beta gamma')\n    assert r.output_contains(['delta', 'beta', 'epsilon']) is True\n\ndef test_contains_iterable_false():\n    r = DummyResult('alpha beta gamma')\n    assert r.output_contains(['delta', 'epsilon']) is False\n\ndef test_iterable_with_non_string_item():\n    r = DummyResult('something')\n    with pytest.raises(TypeError):\n        r.output_contains(['valid', 123])\n"
+ },
+ "f2p": [
+  "tests/test_result_output_contains.py::test_contains_case_sensitive_true",
+  "tests/test_result_output_contains.py::test_contains_case_insensitive",
+  "tests/test_result_output_contains.py::test_invalid_substring_type",
+  "tests/test_result_output_contains.py::test_invalid_case_sensitive_type",
+  "tests/test_result_output_contains.py::test_contains_iterable_true",
+  "tests/test_result_output_contains.py::test_contains_iterable_false",
+  "tests/test_result_output_contains.py::test_iterable_with_non_string_item"
+ ],
+ "requirements": [
+  {
+   "id": "REQ-1",
+   "statement": "Result.output_contains returns True when substring (or any element) is present according to case_sensitive flag",
+   "tests": [
+    "tests/test_result_output_contains.py::test_contains_case_sensitive_true",
+    "tests/test_result_output_contains.py::test_contains_case_insensitive",
+    "tests/test_result_output_contains.py::test_contains_iterable_true",
+    "tests/test_result_output_contains.py::test_contains_iterable_false"
+   ]
+  },
+  {
+   "id": "REQ-2",
+   "statement": "Result.output_contains raises TypeError if substring is not a string nor a sequence of strings",
+   "tests": [
+    "tests/test_result_output_contains.py::test_invalid_substring_type",
+    "tests/test_result_output_contains.py::test_iterable_with_non_string_item"
+   ]
+  },
+  {
+   "id": "REQ-3",
+   "statement": "Result.output_contains raises TypeError if case_sensitive is not a bool",
+   "tests": [
+    "tests/test_result_output_contains.py::test_invalid_case_sensitive_type"
+   ]
+  },
+  {
+   "id": "REQ-4",
+   "statement": "When substring is a sequence, output_contains returns True if any element matches",
+   "tests": [
+    "tests/test_result_output_contains.py::test_contains_iterable_true",
+    "tests/test_result_output_contains.py::test_contains_iterable_false"
+   ]
+  }
+ ]
+}

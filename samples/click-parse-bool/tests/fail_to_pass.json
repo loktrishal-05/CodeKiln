@@ -1,0 +1,8 @@
+[
+ "tests/test_parse_bool.py::test_bool_passthrough",
+ "tests/test_parse_bool.py::test_invalid_string_raises",
+ "tests/test_parse_bool.py::test_invalid_type_raises",
+ "tests/test_parse_bool.py::test_none_returns_default",
+ "tests/test_parse_bool.py::test_none_uses_default_when_omitted",
+ "tests/test_parse_bool.py::test_string_truthy_and_falsy"
+]

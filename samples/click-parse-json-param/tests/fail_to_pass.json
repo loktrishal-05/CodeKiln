@@ -1,0 +1,5 @@
+[
+ "tests/test_parse_json_param.py::test_empty_string_returns_none",
+ "tests/test_parse_json_param.py::test_invalid_json_raises",
+ "tests/test_parse_json_param.py::test_valid_json"
+]

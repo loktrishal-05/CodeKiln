@@ -1,0 +1,12 @@
+{
+ "agent": "oracle",
+ "reward": "1.0",
+ "fail_to_pass": {
+  "tests/test_completion_enabled.py::test_false_values": "passed",
+  "tests/test_completion_enabled.py::test_invalid_value": "passed",
+  "tests/test_completion_enabled.py::test_not_set": "passed",
+  "tests/test_completion_enabled.py::test_true_values": "passed"
+ },
+ "pass_to_pass_total": 2435,
+ "pass_to_pass_passed": 2434
+}

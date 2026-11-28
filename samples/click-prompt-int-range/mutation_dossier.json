@@ -1,0 +1,57 @@
+{
+  "task": "click-prompt-int-range",
+  "ok": true,
+  "semantic_kill_rate": 0.8,
+  "threshold": 0.8,
+  "reasons": [],
+  "probes": [
+    {
+      "name": "noop",
+      "kind": "nop",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "stub",
+      "kind": "stub",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "partial",
+      "kind": "partial",
+      "killed": true,
+      "reward": 0.6666666666666666
+    },
+    {
+      "name": "semantic-flip-false",
+      "kind": "semantic",
+      "killed": false,
+      "reward": 1.0
+    },
+    {
+      "name": "semantic-flip-and",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.3333333333333333
+    },
+    {
+      "name": "semantic-flip-lt",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.3333333333333333
+    },
+    {
+      "name": "semantic-flip-gt",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "semantic-flip-is-not",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.6666666666666666
+    }
+  ]
+}

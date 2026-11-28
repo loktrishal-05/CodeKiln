@@ -1,0 +1,11 @@
+{
+ "agent": "oracle",
+ "reward": "1.0",
+ "fail_to_pass": {
+  "tests/test_prompt_int_range.py::test_inconsistent_bounds_raises": "passed",
+  "tests/test_prompt_int_range.py::test_valid_within_bounds": "passed",
+  "tests/test_prompt_int_range.py::test_value_below_min_raises": "passed"
+ },
+ "pass_to_pass_total": 2435,
+ "pass_to_pass_passed": 2434
+}

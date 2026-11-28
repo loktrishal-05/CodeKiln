@@ -1,0 +1,45 @@
+{
+  "task": "click-completion-enabled",
+  "ok": true,
+  "semantic_kill_rate": 1.0,
+  "threshold": 0.8,
+  "reasons": [],
+  "probes": [
+    {
+      "name": "noop",
+      "kind": "nop",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "stub",
+      "kind": "stub",
+      "killed": true,
+      "reward": 0.0
+    },
+    {
+      "name": "partial",
+      "kind": "partial",
+      "killed": true,
+      "reward": 0.75
+    },
+    {
+      "name": "semantic-flip-true",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.75
+    },
+    {
+      "name": "semantic-flip-false",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.75
+    },
+    {
+      "name": "semantic-rename-def",
+      "kind": "semantic",
+      "killed": true,
+      "reward": 0.0
+    }
+  ]
+}

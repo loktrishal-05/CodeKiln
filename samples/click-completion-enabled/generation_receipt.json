@@ -1,0 +1,39 @@
+{
+  "cost_usd": 0.0,
+  "gates": {
+    "mutation_semantic_kill_rate": 1.0,
+    "state_c_all_pass": true
+  },
+  "hashes": {
+    "environment/Dockerfile": "3a4e6df97e931f1dc5386a308d4aa0d3bfaba7e77bace7c9feaa6d47ed151897",
+    "instruction.md": "52d539e6c165b43b0783f7bac92ee91e6c424066f38fba694373629d8b502a78",
+    "mutation_dossier.json": "7aa4b26b39c5e7fdc5377d3f551559770c5575b3272e24d99b8c39ce5010017c",
+    "rtm_map.json": "808357d2e4de643905e72adde1850308b995d520c37f4f696e8d0bd25cbd7142",
+    "security_audit.json": "79a5e71c3150e55a7b6105abea5207421a52b165f336bd68c894e2c3f103cd14",
+    "solution/reference.diff": "434aec8266668686d3ddffca2e7ec3570801409d8554c077935f271ad404ad3b",
+    "solution/solve.sh": "43a39a7a1a10942c979c3061b5cd2c7afc64a665438d6e676ef001e6ab7e6f20",
+    "spec.json": "003de26af90a7203d0478549bf96666c35e6a3aea60c5863acef9a5c66490d18",
+    "task.toml": "5724e85fde49d5c14f841c3acb4bc9e4be41fdc9886bd184f890d45446115bdc",
+    "tests/fail_to_pass.json": "d92c17a4d7d7eb1d9346f6ba39ccf4983fa642d7cc2b9ec11c060b04a8ed3dd2",
+    "tests/feature/test_completion_enabled.py": "a225977e5dfa059adb69f02ba0861553d364ef71ee56e47258759d22d42cacaf",
+    "tests/pass_to_pass.json": "363e345c5e0b23b0e59232ca4912d3e851c54ff5f6e8a4954972b8da6343fc24",
+    "tests/reward.py": "3c9e2cfd610936f1dacab3e5a74f954e08700543ce256db4e37ac31b0a43ae22",
+    "tests/test.sh": "90cf361b64c7b4df48055ea1dab4efc1bc9984d2f7edbbc520393dd39cf9687e"
+  },
+  "model": "openai/gpt-oss-120b",
+  "security": {
+    "checks": {
+      "canary": true,
+      "diff_policy": true,
+      "editable_install": true,
+      "no_network": true,
+      "no_site_packages_leak": true,
+      "secret_scan": true,
+      "single_commit_snapshot": true
+    },
+    "ok": true,
+    "reasons": []
+  },
+  "spec_sha256": "5be5ce2c92652d5a2c074a8ad28ad93e196671293dd680503720b4f725f4af6f",
+  "task": "click-completion-enabled"
+}

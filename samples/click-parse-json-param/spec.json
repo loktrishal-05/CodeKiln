@@ -1,0 +1,38 @@
+{
+ "task": "click-parse-json-param",
+ "category": "core_logic",
+ "difficulty": "L2",
+ "instruction": "# JSON parameter parser\n\n## Requirements\n- REQ-1: `click.core.parse_json_param(value: str) -> Any` returns the parsed Python object for a valid JSON string.\n- REQ-2: `parse_json_param` returns ``None`` when the input string is empty.\n- REQ-3: `parse_json_param` raises :class:`click.exceptions.BadParameter` for invalid JSON.\n\n## Errors\n- Raises ``BadParameter`` with a clear message when JSON decoding fails.\n",
+ "reference_diff": "diff --git a/src/click/__init__.py b/src/click/__init__.py\n--- a/src/click/__init__.py\n+++ b/src/click/__init__.py\n@@ -71,6 +71,7 @@\n from .utils import format_filename as format_filename\n from .utils import get_app_dir as get_app_dir\n from .utils import open_file as open_file\n+from .core import parse_json_param\n \n \n def __getattr__(name: str) -> object:\ndiff --git a/src/click/core.py b/src/click/core.py\n--- a/src/click/core.py\n+++ b/src/click/core.py\n@@ -123,6 +123,23 @@\n \n def batch(iterable: cabc.Iterable[V], batch_size: int) -> list[tuple[V, ...]]:\n     return list(zip(*repeat(iter(iterable), batch_size), strict=False))\n+\n+\n+def parse_json_param(value: str):\n+    \"\"\"Parse a JSON string into a Python object.\n+\n+    * Returns ``None`` for an empty string.\n+    * Raises :class:`click.exceptions.BadParameter` if the string is not valid JSON.\n+    \"\"\"\n+    if value is None or value == \"\":\n+        return None\n+    import json\n+    try:\n+        return json.loads(value)\n+    except json.JSONDecodeError as exc:\n+        from .exceptions import BadParameter\n+        raise BadParameter(f\"Invalid JSON: {exc.msg}\") from exc\n+\n \n \n @contextmanager\n",
+ "feature_tests": {
+  "test_parse_json_param.py": "import pytest\nfrom click.core import parse_json_param\nfrom click.exceptions import BadParameter\n\ndef test_valid_json():\n    assert parse_json_param('{\"a\": 1, \"b\": [2, 3]}') == {\"a\": 1, \"b\": [2, 3]}\n\ndef test_empty_string_returns_none():\n    assert parse_json_param('') is None\n\ndef test_invalid_json_raises():\n    with pytest.raises(BadParameter):\n        parse_json_param('{\"a\": 1,}')\n"
+ },
+ "f2p": [
+  "tests/test_parse_json_param.py::test_valid_json",
+  "tests/test_parse_json_param.py::test_empty_string_returns_none",
+  "tests/test_parse_json_param.py::test_invalid_json_raises"
+ ],
+ "requirements": [
+  {
+   "id": "REQ-1",
+   "statement": "parse_json_param returns parsed object for valid JSON",
+   "tests": [
+    "tests/test_parse_json_param.py::test_valid_json"
+   ]
+  },
+  {
+   "id": "REQ-2",
+   "statement": "parse_json_param returns None for empty string",
+   "tests": [
+    "tests/test_parse_json_param.py::test_empty_string_returns_none"
+   ]
+  },
+  {
+   "id": "REQ-3",
+   "statement": "parse_json_param raises BadParameter for invalid JSON",
+   "tests": [
+    "tests/test_parse_json_param.py::test_invalid_json_raises"
+   ]
+  }
+ ]
+}

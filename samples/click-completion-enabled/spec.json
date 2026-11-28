@@ -1,0 +1,46 @@
+{
+ "task": "click-completion-enabled",
+ "category": "core_logic",
+ "difficulty": "L2",
+ "instruction": "# Completion enable flag\n\nAdd a public helper that determines whether shell completion is enabled based on the environment variable ``CLICK_COMPLETION_DISABLED``.\n\n## Requirements\n- REQ-1: ``click.shell_completion.completion_enabled()`` returns ``True`` when the environment variable is not set.\n- REQ-2: ``completion_enabled()`` returns ``False`` when the variable is set to a falsey value (``\"0\"``, ``\"false\"``, case\u2011insensitive).\n- REQ-3: ``completion_enabled()`` returns ``True`` when the variable is set to a truthy value (``\"1\"``, ``\"true\"``, case\u2011insensitive).\n- REQ-4: ``completion_enabled()`` raises ``ValueError`` for any other value.\n\n## Errors\n- ``ValueError`` is raised when the environment variable contains an unrecognised value.\n",
+ "reference_diff": "diff --git a/src/click/shell_completion.py b/src/click/shell_completion.py\n--- a/src/click/shell_completion.py\n+++ b/src/click/shell_completion.py\n@@ -385,6 +385,31 @@\n         return \"\\n\".join(out)\n \n \n+def completion_enabled() -> bool:\n+    \"\"\"Return ``True`` if shell completion is enabled.\n+\n+    The decision is based on the ``CLICK_COMPLETION_DISABLED`` environment\n+    variable:\n+\n+    * If the variable is **not set**, completion is considered enabled.\n+    * If set to ``\"0\"`` or ``\"false\"`` (case\u2011insensitive), completion is disabled.\n+    * If set to ``\"1\"`` or ``\"true\"`` (case\u2011insensitive), completion is enabled.\n+    * Any other value results in a ``ValueError``.\n+    \"\"\"\n+    import os\n+\n+    var = os.getenv(\"CLICK_COMPLETION_DISABLED\")\n+    if var is None:\n+        return True\n+    lowered = var.lower()\n+    if lowered in (\"0\", \"false\"):\n+        return False\n+    if lowered in (\"1\", \"true\"):\n+        return True\n+    raise ValueError(f\"Invalid value for CLICK_COMPLETION_DISABLED: {var!r}\")\n+\n+\n+\n class BashComplete(ShellComplete):\n     \"\"\"Shell completion for Bash.\"\"\"\n \n",
+ "feature_tests": {
+  "test_completion_enabled.py": "import os\nimport pytest\nfrom click.shell_completion import completion_enabled\n\ndef test_not_set(monkeypatch):\n    monkeypatch.delenv('CLICK_COMPLETION_DISABLED', raising=False)\n    assert completion_enabled() is True\n\ndef test_false_values(monkeypatch):\n    for val in ('0', 'false', 'FALSE'):\n        monkeypatch.setenv('CLICK_COMPLETION_DISABLED', val)\n        assert completion_enabled() is False\n\ndef test_true_values(monkeypatch):\n    for val in ('1', 'true', 'TRUE'):\n        monkeypatch.setenv('CLICK_COMPLETION_DISABLED', val)\n        assert completion_enabled() is True\n\ndef test_invalid_value(monkeypatch):\n    monkeypatch.setenv('CLICK_COMPLETION_DISABLED', 'maybe')\n    with pytest.raises(ValueError) as exc:\n        completion_enabled()\n    assert 'Invalid value' in str(exc.value)\n"
+ },
+ "f2p": [
+  "tests/test_completion_enabled.py::test_not_set",
+  "tests/test_completion_enabled.py::test_false_values",
+  "tests/test_completion_enabled.py::test_true_values",
+  "tests/test_completion_enabled.py::test_invalid_value"
+ ],
+ "requirements": [
+  {
+   "id": "REQ-1",
+   "statement": "completion_enabled returns True when the env var is not set",
+   "tests": [
+    "tests/test_completion_enabled.py::test_not_set"
+   ]
+  },
+  {
+   "id": "REQ-2",
+   "statement": "completion_enabled returns False for falsey env var values",
+   "tests": [
+    "tests/test_completion_enabled.py::test_false_values"
+   ]
+  },
+  {
+   "id": "REQ-3",
+   "statement": "completion_enabled returns True for truthy env var values",
+   "tests": [
+    "tests/test_completion_enabled.py::test_true_values"
+   ]
+  },
+  {
+   "id": "REQ-4",
+   "statement": "completion_enabled raises ValueError for unrecognised env var values",
+   "tests": [
+    "tests/test_completion_enabled.py::test_invalid_value"
+   ]
+  }
+ ]
+}

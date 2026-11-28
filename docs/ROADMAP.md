@@ -28,7 +28,7 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - [ ] **[H]** Static HTML dashboard (`codekiln report` -> `factory_report.html`)
 - [ ] **[C]** One-command reproducible run (`scripts/demo_run.sh`, factory Dockerfile so judges can re-run us) + CI hardening; verify end-to-end on click (all, Dec 4-5)
 - [ ] **[H]** Cross-task oracle matrix (`codekiln matrix` -> `variation_matrix.json`) + heatmap in the dashboard
-- [ ] **[H]** `samples/`: the 5 final click packages + their Harbor nop/oracle logs, committed (exception to the no-generated-output rule)
+- [x] **[H]** `samples/`: the 5 final click packages + their Harbor nop/oracle logs, committed (exception to the no-generated-output rule)
 - [ ] **[H]** `docs/TECHNICAL.md`: design decisions, assumptions, reused components, every model/tool used, variation strategy, manual-fix log
 - [ ] **[H]** Submission assets: video, Hack2Skill deck from the Resources template (all review)
 

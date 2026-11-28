@@ -25,6 +25,7 @@ packages = ["src/codekiln"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["samples"]  # sealed task packages: data, not our code (a manifest guards them)
 src = ["src", "tests"]
 
 [tool.mypy]

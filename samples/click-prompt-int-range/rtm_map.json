@@ -1,0 +1,16 @@
+{
+  "task": "click-prompt-int-range",
+  "ok": true,
+  "requirements": {
+    "REQ-1": [
+      "tests/test_prompt_int_range.py::test_valid_within_bounds"
+    ],
+    "REQ-2": [
+      "tests/test_prompt_int_range.py::test_inconsistent_bounds_raises"
+    ],
+    "REQ-3": [
+      "tests/test_prompt_int_range.py::test_value_below_min_raises"
+    ]
+  },
+  "problems": []
+}
