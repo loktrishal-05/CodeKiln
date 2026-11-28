@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from codekiln.synthesis.edits import EDITS_FORMAT, diff_from_reply, reference_context
 from codekiln.synthesis.llm_router import ModelConfig, Post, complete
+from codekiln.synthesis.models import SynthesisError
 from codekiln.validation.mutation_probe import harbor_probe, patch_problem
 
 AltRun = Callable[[Path, Path], float | None]  # (swapped task dir, -o dir) -> reward
@@ -105,12 +107,17 @@ def clean_diff(text: str) -> str:
 class LLMAlternativeWriter:
     """Host-side proposer: one completion, bounded repair, no verdict of its own."""
 
-    def __init__(self, config: ModelConfig, post: Post | None = None, retries: int = 1) -> None:
+    def __init__(self, config: ModelConfig, post: Post | None = None, retries: int = 1,
+                 workspace: Path | None = None) -> None:
         self._config = config
         self._post = post
         self._retries = retries
+        self._workspace = workspace  # the repo at the base commit: with it the model sends edits, code builds the diff
 
     def write(self, instruction: str, reference_diff: str) -> str:
+        ws = self._workspace
+        ask = ("Return a different correct implementation as edits.\n" + EDITS_FORMAT if ws
+               else "Return a different correct implementation as a diff.")
         messages = [
             {"role": "system", "content": ALTERNATIVE_SYSTEM},
             {
@@ -118,7 +125,8 @@ class LLMAlternativeWriter:
                 "content": (
                     "# instruction.md\n" + instruction
                     + "\n\n# reference patch (context only — do not copy it)\n```diff\n"
-                    + reference_diff + "```\n\nReturn a different correct implementation as a diff."
+                    + reference_diff + "```\n\n"
+                    + (f"# context pack\n{reference_context(ws, reference_diff)}\n\n" if ws else "") + ask
                 ),
             },
         ]
@@ -131,12 +139,13 @@ class LLMAlternativeWriter:
         for _ in range(self._retries + 1):
             reply = complete(self._config, messages, post)
             try:
-                return clean_diff(reply)
-            except CriticError as e:
+                return clean_diff(diff_from_reply(reply, ws) if ws else reply)
+            except (CriticError, SynthesisError) as e:
                 last = str(e)
                 messages += [
                     {"role": "assistant", "content": reply},
-                    {"role": "user", "content": f"Rejected: {last}\nReturn only a valid raw diff."},
+                    {"role": "user", "content": f"Rejected: {last}\n"
+                     + ("Reply with valid edits JSON only." if ws else "Return only a valid raw diff.")},
                 ]
         raise CriticError(f"no valid alternative after {self._retries + 1} attempts: {last}")
 

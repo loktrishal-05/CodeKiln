@@ -14,6 +14,7 @@ Every edit is checked against the real workspace and the finished diff is proven
 """
 import ast
 import difflib
+import json
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
@@ -21,6 +22,43 @@ from pathlib import Path, PurePosixPath
 from codekiln.synthesis.models import SynthesisError
 
 MAX_EDITS = 12
+
+# What a writer is told when it must propose code without seeing line numbers (shared by every agent that
+# proposes a patch: the test critic's alternative solution, the adversarial mutants).
+EDITS_FORMAT = """\
+Do NOT write a diff: you cannot see line numbers. Reply with JSON only, {"edits": [...]}, where each edit is
+{"op": "add_import", "path": P, "line": "import json"} |
+{"op": "insert_after", "path": P, "symbol": "<an existing top-level def or class in P>", "code": "..."} |
+{"op": "append", "path": P, "code": "..."} | {"op": "new_file", "path": P, "code": "..."}.
+Use only paths and symbol names from the context pack. Edits only ADD code and never touch tests."""
+
+
+def reference_context(root: Path, reference_diff: str) -> str:
+    """The Repo Scout pack for the files REFERENCE_DIFF touches: the real symbols a writer may anchor edits to."""
+    from codekiln.synthesis.models import _DIFF_PATH
+    from codekiln.synthesis.scout import context_pack
+
+    try:
+        return context_pack(root, dict.fromkeys(_DIFF_PATH.findall(reference_diff)))
+    except (OSError, ValueError):
+        return ""  # the pack is a hint; a repo it cannot read must not stop the proposal
+
+
+def diff_from_reply(text: str, root: Path) -> str:
+    """The unified diff for a reply of `{"edits": [...]}` (fenced or not), built from the real files under ROOT."""
+    body = text.strip()
+    if body.startswith("```"):
+        body = body.split("\n", 1)[1] if "\n" in body else ""
+    start, end = body.find("{"), body.rfind("}")
+    if start < 0 or end < start:
+        raise SynthesisError("completion contains no JSON object")
+    try:
+        raw: object = json.loads(body[start : end + 1])
+    except json.JSONDecodeError as e:
+        raise SynthesisError(f"completion is not valid JSON: {e.msg}") from e
+    if not isinstance(raw, dict) or "edits" not in raw:
+        raise SynthesisError('reply must be a JSON object {"edits": [...]}')
+    return build_diff(root, raw["edits"])
 
 
 def build_diff(root: Path, edits: object) -> str:

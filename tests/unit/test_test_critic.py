@@ -130,6 +130,8 @@ def test_llm_writer_repairs_a_fenced_completion(tmp_path: Path) -> None:
 def test_cli_meters_the_alternative_and_writes_a_narrow_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # no network: the fixture package points at a real URL, and the writers then send raw diffs
+    monkeypatch.setattr("codekiln.pipeline.checkout_for_package", lambda package, workdir: None)
     package = write_package(tmp_path / "task", make_spec(), repo_url=REPO, base_commit=SHA)
     db = tmp_path / "k.sqlite"
     con = connect(str(db))
