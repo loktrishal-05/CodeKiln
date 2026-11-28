@@ -1,0 +1,127 @@
+%%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280"}}}%%
+flowchart TB
+  OP(("Factory<br/>operator")):::actor
+
+  subgraph INTAKE["Intake and planning"]
+    CLI["CLI<br/>[cli.py]"]:::intake
+    PIPE["Pipeline orchestration<br/>[pipeline.py]"]:::intake
+    LOAD["Repository loader<br/>[repo_loader.py]"]:::intake
+    REV["Reverse feature extraction<br/>[reverse_extract.py]"]:::intake
+    FWD["Forward planning<br/>[forward_synth.py]"]:::intake
+    DIV["Difficulty and diversity<br/>[difficulty.py, diversity_guard.py]"]:::intake
+    PLANM["Candidate plan<br/>[planner/models.py]"]:::intake
+    FACT["Factory driver<br/>[factory.py]"]:::intake
+    ORCH["Action-ordering agent<br/>[orchestrator.py]"]:::intake
+  end
+
+  subgraph SYNTH["Task synthesis"]
+    SYN["Synthesis runner<br/>[runner.py]"]:::synth
+    SCOUT["Repo Scout context<br/>[scout.py]"]:::synth
+    ROUTER["LLM router<br/>[llm_router.py]"]:::synth
+    SPEC["Feature specification<br/>[synthesis/models.py]"]:::synth
+    EDITS["Edit builder<br/>[edits.py]"]:::synth
+    RTM["Requirement-test audit<br/>[rtm.py]"]:::synth
+    EMIT["Package emitter<br/>[emit.py]"]:::synth
+    REPAIR["Evidence-based repair<br/>[repair.py]"]:::synth
+    IDEA["Feature ideator<br/>[ideator.py]"]:::synth
+  end
+
+  subgraph TRUST["Trust and validation"]
+    BLIND["Blind-reader lint<br/>[blind_reader.py]"]:::trust
+    GATE["3-state execution gate<br/>[gate_runner.py, verify.py]"]:::trust
+    MUT["Mutation probes<br/>[mutation_probe.py]"]:::trust
+    ADV["Adversarial mutants, test critic<br/>[adversarial.py, test_critic.py]"]:::trust
+    RED["Red team<br/>[red_team.py]"]:::trust
+    ISO["Isolated verifier<br/>[verifier_sandbox.py]"]:::trust
+    FIRE["Contamination firewall<br/>[firewall.py]"]:::trust
+    HRUN["Harbor task runner<br/>[harbor_runner.py]"]:::trust
+  end
+
+  subgraph PACK["Packaging and evaluation"]
+    PKG["Harbor packager<br/>[packager.py]"]:::pack
+    HFMT["Harbor task format<br/>[harbor.py]"]:::pack
+    SCRUB["Security scrubber<br/>[scrubber.py]"]:::pack
+    MATRIX["Cross-task matrix<br/>[variation_matrix.py]"]:::pack
+    REPORT["Dashboard<br/>[report_builder.py]"]:::pack
+    EVAL["Blind evaluation<br/>[eval_runner.py, blind_panel.py]"]:::pack
+    CALIB["Difficulty calibration<br/>[calibration.py, irt.py]"]:::pack
+  end
+
+  subgraph STATE["State and accounting"]
+    DB[("Factory ledger<br/>[db.py]")]:::state
+    STM["Candidate state machine<br/>[states.py]"]:::state
+    BILL[("Cost and budget ledger<br/>[billing/ledger.py]")]:::state
+  end
+
+  REPO{{"Target repository<br/>pallets/click"}}:::ext
+  LLM{{"Chat model service<br/>OpenAI-compatible"}}:::ext
+  HARBOR{{"Harbor runtime<br/>Docker sandboxes, no network"}}:::ext
+
+  OP -->|"invokes"| CLI
+  CLI -->|"starts run"| PIPE
+  CLI -->|"drives candidates"| FACT
+  FACT -.->|"optionally ordered by"| ORCH
+  PIPE -->|"loads repository"| LOAD
+  LOAD -->|"checks out"| REPO
+  PIPE -->|"plans features"| REV
+  PIPE -->|"plans features"| FWD
+  PIPE -->|"balances candidates"| DIV
+  REV -->|"creates plans"| PLANM
+  FWD -->|"creates plans"| PLANM
+  PIPE -->|"records candidates"| DB
+
+  FACT -->|"starts synthesis"| SYN
+  SYN -->|"builds context"| SCOUT
+  SYN -->|"requests feature spec"| ROUTER
+  ROUTER -->|"requests completion"| LLM
+  ROUTER -->|"parses and validates"| SPEC
+  ROUTER -->|"turns edits into a diff"| EDITS
+  SYN -->|"audits traceability"| RTM
+  SYN -->|"writes task files"| EMIT
+  EMIT -->|"lays out"| HFMT
+  CLI -->|"proposes N specs"| IDEA
+  IDEA -->|"requests completion"| ROUTER
+  ROUTER -->|"meters generation"| BILL
+
+  FACT -->|"checks instruction"| BLIND
+  FACT -->|"runs gates"| GATE
+  FACT -->|"runs probes"| MUT
+  ADV -->|"adds wrong solutions"| MUT
+  CLI -->|"red-teams a package"| RED
+  CLI -->|"grades a diff"| ISO
+  CLI -->|"flags later releases"| FIRE
+  GATE -->|"executes phases"| HRUN
+  MUT -->|"runs mutants"| HRUN
+  RED -->|"runs cheats"| HRUN
+  ADV -->|"runs alternatives"| HRUN
+  ISO -->|"grades in a container"| HARBOR
+  HRUN -->|"runs task"| HARBOR
+  GATE -->|"advances on pass"| STM
+  FACT -->|"on rejection"| REPAIR
+  REPAIR -->|"re-asks with the real failure"| ROUTER
+
+  FACT -->|"packages task"| PKG
+  PKG -->|"scrubs package"| SCRUB
+  PKG -->|"writes Harbor files"| HFMT
+  CLI -->|"compares tasks"| MATRIX
+  MATRIX -->|"runs oracle trials"| HRUN
+  CLI -->|"builds report"| REPORT
+  REPORT -->|"renders state data"| DB
+  CLI -->|"starts evaluation"| EVAL
+  EVAL -->|"runs evaluation task"| HRUN
+  EVAL -->|"records results"| DB
+  CALIB -->|"reads solve rates"| EVAL
+  STM -->|"persisted in"| DB
+
+  classDef actor fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+  classDef intake fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+  classDef synth fill:#fef3c7,stroke:#f59e0b,color:#78350f
+  classDef trust fill:#d1fae5,stroke:#10b981,color:#064e3b
+  classDef pack fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+  classDef state fill:#e0e7ff,stroke:#6366f1,color:#312e81
+  classDef ext fill:#e0e7ff,stroke:#4f46e5,color:#312e81
+  style INTAKE fill:#f7f7f7,stroke:#d4d4d8
+  style SYNTH fill:#f7f7f7,stroke:#d4d4d8
+  style TRUST fill:#f7f7f7,stroke:#d4d4d8
+  style PACK fill:#f7f7f7,stroke:#d4d4d8
+  style STATE fill:#f7f7f7,stroke:#d4d4d8
