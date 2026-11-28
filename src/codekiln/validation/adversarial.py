@@ -10,7 +10,9 @@ import re
 from pathlib import Path
 from typing import Protocol
 
+from codekiln.synthesis.edits import EDITS_FORMAT, diff_from_reply, reference_context
 from codekiln.synthesis.llm_router import ModelConfig, Post, complete
+from codekiln.synthesis.models import SynthesisError
 from codekiln.validation.mutation_probe import Mutant, patch_problem
 
 ADVERSARIAL_SYSTEM = """\
@@ -45,20 +47,25 @@ def clean_diff(text: str) -> str:
 class LLMAdversarialWriter:
     """Host-side proposer; validation and execution stay in code."""
 
-    def __init__(self, config: ModelConfig, post: Post | None = None, retries: int = 1) -> None:
+    def __init__(self, config: ModelConfig, post: Post | None = None, retries: int = 1,
+                 workspace: Path | None = None) -> None:
         self._config = config
         self._post = post
         self._retries = retries
+        self._workspace = workspace  # the repo at the base commit: with it the model sends edits, code builds the diff
 
     def write(self, instruction: str, reference_diff: str) -> str:
+        ws = self._workspace
+        ask = ("Return one plausible but wrong implementation as edits.\n" + EDITS_FORMAT if ws
+               else "Return one plausible but wrong unified diff.")
         messages = [
             {"role": "system", "content": ADVERSARIAL_SYSTEM},
             {
                 "role": "user",
                 "content": (
                     "# instruction.md\n" + instruction
-                    + "\n\n# reference patch\n```diff\n" + reference_diff
-                    + "```\n\nReturn one plausible but wrong unified diff."
+                    + "\n\n# reference patch\n```diff\n" + reference_diff + "```\n\n"
+                    + (f"# context pack\n{reference_context(ws, reference_diff)}\n\n" if ws else "") + ask
                 ),
             },
         ]
@@ -71,12 +78,13 @@ class LLMAdversarialWriter:
         for _ in range(self._retries + 1):
             reply = complete(self._config, messages, post)
             try:
-                return clean_diff(reply)
-            except AdversarialError as e:
+                return clean_diff(diff_from_reply(reply, ws) if ws else reply)
+            except (AdversarialError, SynthesisError) as e:
                 last = str(e)
                 messages += [
                     {"role": "assistant", "content": reply},
-                    {"role": "user", "content": f"Rejected: {last}\nReturn only a valid raw diff."},
+                    {"role": "user", "content": f"Rejected: {last}\n"
+                     + ("Reply with valid edits JSON only." if ws else "Return only a valid raw diff.")},
                 ]
         raise AdversarialError(f"no valid mutant after {self._retries + 1} attempts: {last}")
 

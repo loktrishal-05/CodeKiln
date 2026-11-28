@@ -170,3 +170,76 @@ def test_the_workspace_is_cloned_with_the_repos_real_lf_bytes_even_if_git_would_
         monkeypatch.setenv(key, value)  # simulate a user's global autocrlf=true
     load_repo(str(src), tmp_path / "ws")
     assert b"\r\n" not in (tmp_path / "ws" / "a.py").read_bytes()
+
+
+# --- the agent writers (test critic, adversarial mutants) send edits too -----------------------------------------
+
+REF = (
+    "diff --git a/src/click/types.py b/src/click/types.py\n--- a/src/click/types.py\n+++ b/src/click/types.py\n"
+    "@@ -1,0 +1,2 @@\n+class Json(ParamType):\n+    name = \"json\"\n"
+)
+GOOD_EDITS = json.dumps({"edits": [{"op": "insert_after", "path": "src/click/types.py", "symbol": "StringParamType",
+                                    "code": "class AltJson(ParamType):\n    name = \"alt\"\n"}]})
+
+
+def _post(replies: list[str], seen: list[str] | None = None):  # type: ignore[no-untyped-def]
+    def post(url, headers, payload):  # type: ignore[no-untyped-def]
+        if seen is not None:
+            seen.append(payload["messages"][1]["content"])
+        return {"choices": [{"message": {"content": replies.pop(0)}}]}
+    return post
+
+
+CFG = ModelConfig(base_url="https://x.invalid/v1", api_key="sk-test", model="m")
+
+
+def test_diff_from_reply_builds_a_real_patch_from_fenced_or_bare_json(tmp_path: Path) -> None:
+    from codekiln.synthesis.edits import diff_from_reply
+
+    root = repo(tmp_path / "r")
+    for reply in (GOOD_EDITS, f"```json\n{GOOD_EDITS}\n```"):
+        assert patch_problem(diff_from_reply(reply, root)) == ""
+    for bad, why in (("no json here", "no JSON object"), ("{not json}", "not valid JSON"), ('{"x": 1}', "edits")):
+        with pytest.raises(SynthesisError, match=why):
+            diff_from_reply(bad, root)
+
+
+def test_alternative_writer_with_a_checkout_sends_edits_and_returns_a_patch_that_applies(tmp_path: Path) -> None:
+    """Real run: asked for a raw diff the model returned prose or a corrupt hunk, so the critic never ran."""
+    from codekiln.validation.test_critic import LLMAlternativeWriter
+
+    root, seen = repo(tmp_path / "r"), []
+    diff = LLMAlternativeWriter(CFG, post=_post([GOOD_EDITS], seen), workspace=root).write("do it", REF)
+    assert "AltJson" in applied(root, diff, "src/click/types.py", tmp_path)
+    assert "Do NOT write a diff" in seen[0] and "StringParamType" in seen[0]  # edits format + the real symbols
+
+
+def test_alternative_writer_repairs_a_bad_symbol_with_the_real_symbol_list(tmp_path: Path) -> None:
+    from codekiln.validation.test_critic import LLMAlternativeWriter
+
+    root = repo(tmp_path / "r")
+    bad = GOOD_EDITS.replace("StringParamType", "NoSuchClass")
+    diff = LLMAlternativeWriter(CFG, post=_post([bad, GOOD_EDITS]), workspace=root).write("do it", REF)
+    assert "AltJson" in applied(root, diff, "src/click/types.py", tmp_path)
+
+
+def test_adversarial_writer_with_a_checkout_sends_edits(tmp_path: Path) -> None:
+    from codekiln.validation.adversarial import LLMAdversarialWriter
+
+    root, seen = repo(tmp_path / "r"), []
+    diff = LLMAdversarialWriter(CFG, post=_post([GOOD_EDITS], seen), workspace=root).write("do it", REF)
+    assert patch_problem(diff) == "" and "wrong implementation as edits" in seen[0]
+
+
+def test_checkout_for_package_reuses_an_existing_checkout_and_never_guesses(tmp_path: Path) -> None:
+    from codekiln.pipeline import checkout_for_package, workspace_path
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "task.toml").write_text('[metadata]\nrepo = "https://example.invalid/r"\nbase_commit = "abc123def456aa"\n',
+                                   encoding="utf-8", newline="\n")
+    dest = workspace_path("https://example.invalid/r", "abc123def456aa", tmp_path / "ws")
+    dest.mkdir(parents=True)
+    assert checkout_for_package(pkg, tmp_path / "ws") == dest  # already there: no network
+    (pkg / "task.toml").write_text("[metadata]\n", encoding="utf-8", newline="\n")
+    assert checkout_for_package(pkg, tmp_path / "ws") is None  # no repo or commit recorded

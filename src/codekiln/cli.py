@@ -363,6 +363,7 @@ def test_critic(
     run_id: int,
     alternatives: int = typer.Option(1, min=1),
     work: Path = Path("critic-work"),
+    workdir: Path = Path("workspaces"),
     out: Path = Path("test_critic.json"),
     db: Path | None = None,
     model: str | None = None,
@@ -405,7 +406,12 @@ def test_critic(
         budget.start_candidate(find_candidate(con, package) or 0)
     finally:
         con.close()
-    writer = critic.LLMAlternativeWriter(config, post=budget.meter_post(http_post))
+    from codekiln.pipeline import checkout_for_package
+
+    workspace = checkout_for_package(package, workdir)
+    if workspace is None:
+        typer.echo("warn: no checkout of the repo; the model must write a raw diff (rarely applies)", err=True)
+    writer = critic.LLMAlternativeWriter(config, post=budget.meter_post(http_post), workspace=workspace)
     try:
         budget.guard()
         result = critic.critique_tests(package, work, writer, alternatives=alternatives)
@@ -520,6 +526,7 @@ def firewall(
 def probe(
     package: Path,
     work: Path = Path("runs/probes"),
+    workdir: Path = Path("workspaces"),
     out: Path | None = None,
     threshold: float | None = None,
     adversarial: int = typer.Option(0, min=0),
@@ -563,7 +570,12 @@ def probe(
             budget.start_candidate(find_candidate(con, package) or 0)
         finally:
             con.close()
-        writer = adv.LLMAdversarialWriter(config, post=budget.meter_post(http_post))
+        from codekiln.pipeline import checkout_for_package
+
+        workspace = checkout_for_package(package, workdir)
+        if workspace is None:
+            typer.echo("warn: no checkout of the repo; the model must write a raw diff (rarely applies)", err=True)
+        writer = adv.LLMAdversarialWriter(config, post=budget.meter_post(http_post), workspace=workspace)
         try:
             budget.guard()
             mutants, rejected = adv.propose_mutants(

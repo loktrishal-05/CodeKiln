@@ -130,6 +130,8 @@ def test_llm_writer_repairs_a_fenced_completion(tmp_path: Path) -> None:
 def test_cli_meters_the_alternative_and_writes_a_narrow_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # no network: the fixture package points at a real URL, and the writers then send raw diffs
+    monkeypatch.setattr("codekiln.pipeline.checkout_for_package", lambda package, workdir: None)
     package = write_package(tmp_path / "task", make_spec(), repo_url=REPO, base_commit=SHA)
     db = tmp_path / "k.sqlite"
     con = connect(str(db))
@@ -181,3 +183,40 @@ def test_cli_meters_the_alternative_and_writes_a_narrow_report(
         )
     finally:
         con.close()
+
+
+def _trial(out: Path, results: dict[str, str]) -> None:
+    v = out / "2026-01-01__00-00-00" / "alt-0__x" / "verifier"
+    v.mkdir(parents=True)
+    (v / "results.json").write_text(json.dumps(results))
+
+
+def test_an_alternative_that_only_breaks_existing_tests_is_wrong_not_a_sign_of_narrow_tests(
+    package: Path, tmp_path: Path
+) -> None:
+    """Real run: the model's alternative put `import json` at the top of core.py, passed all 3 feature tests and
+    broke click's own `test_light_imports`. The critic called that 'tests too narrow on 3 F2P nodes'."""
+    f2p = json.loads((package / "tests" / "fail_to_pass.json").read_text())
+
+    def run(task: Path, out: Path) -> float:
+        _trial(out, {**dict.fromkeys(f2p, "passed"), "tests/test_imports.py::test_light_imports": "failed",
+                     "tests/test_other.py::test_skip": "skipped"})
+        return 0.0
+
+    result = critique_tests(package, tmp_path / "work", FixedWriter([ALT_DIFF]), run=run)
+    alt = result.alternatives[0]
+    assert not alt.too_narrow and not result.too_narrow
+    assert alt.broke_existing == ("tests/test_imports.py::test_light_imports",)  # a skipped test is not a break
+    assert "breaks existing test" in alt.reason and "the alternative is wrong, not the tests" in alt.reason
+    assert json.loads(result.to_json())["alternatives"][0]["broke_existing"] == list(alt.broke_existing)
+
+
+def test_failing_feature_tests_are_named_when_the_tests_may_be_too_narrow(package: Path, tmp_path: Path) -> None:
+    f2p = json.loads((package / "tests" / "fail_to_pass.json").read_text())
+
+    def run(task: Path, out: Path) -> float:
+        _trial(out, {f2p[0]: "failed", **dict.fromkeys(f2p[1:], "passed")})
+        return 0.5
+
+    result = critique_tests(package, tmp_path / "work", FixedWriter([ALT_DIFF]), run=run)
+    assert result.too_narrow and f2p[0] in result.alternatives[0].reason

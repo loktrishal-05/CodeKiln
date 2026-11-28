@@ -114,6 +114,8 @@ def test_killed_adversarial_mutant_keeps_the_dossier_green(package: Path, tmp_pa
 def test_cli_generates_meters_and_reports_an_adversarial_survivor(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # no network: the fixture package points at a real URL, and the writers then send raw diffs
+    monkeypatch.setattr("codekiln.pipeline.checkout_for_package", lambda package, workdir: None)
     package = write_package(tmp_path / "task", make_spec(), repo_url=REPO, base_commit=SHA)
     db = tmp_path / "k.sqlite"
     con = connect(str(db))
@@ -177,6 +179,7 @@ def test_cli_reports_a_provider_failure_cleanly(tmp_path: Path, monkeypatch: pyt
         raise RouterError("provider returned HTTP 503")
 
     monkeypatch.setattr("codekiln.synthesis.llm_router.http_post", down)
+    monkeypatch.setattr("codekiln.pipeline.checkout_for_package", lambda package, workdir: None)  # no network
     monkeypatch.setenv("CODEKILN_DB_PATH", str(db))
     monkeypatch.setenv("CODEKILN_LLM_API_KEY", "sk-test")
     monkeypatch.setenv("CODEKILN_BILLING_LEDGER", str(tmp_path / "billing.csv"))

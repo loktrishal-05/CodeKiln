@@ -5,13 +5,14 @@ and PROFILED/ENV_READY are skipped until the profiler lands.
 """
 import shutil
 import sqlite3
+import tomllib
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from codekiln.db import idempotency_key
-from codekiln.ingestion.repo_loader import load_repo
+from codekiln.ingestion.repo_loader import IngestionError, load_repo
 from codekiln.planner import plan
 from codekiln.planner.difficulty import balance, level
 from codekiln.planner.diversity_guard import fingerprint
@@ -34,6 +35,25 @@ def workspace_path(source: str, commit: str, workdir: Path) -> Path:
     """Where `run_pipeline` checks out SOURCE at COMMIT (so a resumed run can find it again)."""
     name = Path(source.rstrip("/")).stem or "repo"
     return workdir / f"{name}-{commit[:12]}"
+
+
+def checkout_for_package(package: Path, workdir: Path) -> Path | None:
+    """The repo at PACKAGE's pinned base commit (reused if already checked out), or None when it cannot be had.
+
+    The agent writers (alternative solutions, adversarial mutants) need the real files: a model that cannot see
+    them cannot write a diff that applies, so it sends edits and code builds the diff from this checkout."""
+    meta = tomllib.loads((package / "task.toml").read_text(encoding="utf-8")).get("metadata", {})
+    url, commit = meta.get("repo"), meta.get("base_commit")
+    if not isinstance(url, str) or not isinstance(commit, str):
+        return None
+    dest = workspace_path(url, commit, workdir)
+    if dest.exists():
+        return dest
+    try:
+        load_repo(url, dest, commit)
+    except (IngestionError, OSError):
+        return None
+    return dest
 
 
 def run_pipeline(

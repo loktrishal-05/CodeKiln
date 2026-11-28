@@ -16,7 +16,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from codekiln.synthesis.edits import EDITS_FORMAT, diff_from_reply, reference_context
 from codekiln.synthesis.llm_router import ModelConfig, Post, complete
+from codekiln.synthesis.models import SynthesisError
 from codekiln.validation.mutation_probe import harbor_probe, patch_problem
 
 AltRun = Callable[[Path, Path], float | None]  # (swapped task dir, -o dir) -> reward
@@ -39,10 +41,13 @@ class Alternative:
     reward: float | None
     passed: bool
     reason: str  # empty when the alternative passed, otherwise the exact rejection reason
+    broke_existing: tuple[str, ...] = ()  # existing tests it broke while passing every feature test
 
     @property
     def too_narrow(self) -> bool:
-        return self.reward is not None and self.reward < 1.0
+        # An alternative that passes every feature test and only breaks click's own tests says nothing
+        # about the feature tests: the alternative is wrong, and the regression guard did its job.
+        return self.reward is not None and self.reward < 1.0 and not self.broke_existing
 
 
 @dataclass(frozen=True)
@@ -71,6 +76,7 @@ class TestCritique:
                         "reward": a.reward,
                         "passed": a.passed,
                         "too_narrow": a.too_narrow,
+                        "broke_existing": list(a.broke_existing),
                         "reason": a.reason,
                     }
                     for a in self.alternatives
@@ -105,12 +111,17 @@ def clean_diff(text: str) -> str:
 class LLMAlternativeWriter:
     """Host-side proposer: one completion, bounded repair, no verdict of its own."""
 
-    def __init__(self, config: ModelConfig, post: Post | None = None, retries: int = 1) -> None:
+    def __init__(self, config: ModelConfig, post: Post | None = None, retries: int = 1,
+                 workspace: Path | None = None) -> None:
         self._config = config
         self._post = post
         self._retries = retries
+        self._workspace = workspace  # the repo at the base commit: with it the model sends edits, code builds the diff
 
     def write(self, instruction: str, reference_diff: str) -> str:
+        ws = self._workspace
+        ask = ("Return a different correct implementation as edits.\n" + EDITS_FORMAT if ws
+               else "Return a different correct implementation as a diff.")
         messages = [
             {"role": "system", "content": ALTERNATIVE_SYSTEM},
             {
@@ -118,7 +129,8 @@ class LLMAlternativeWriter:
                 "content": (
                     "# instruction.md\n" + instruction
                     + "\n\n# reference patch (context only — do not copy it)\n```diff\n"
-                    + reference_diff + "```\n\nReturn a different correct implementation as a diff."
+                    + reference_diff + "```\n\n"
+                    + (f"# context pack\n{reference_context(ws, reference_diff)}\n\n" if ws else "") + ask
                 ),
             },
         ]
@@ -131,14 +143,28 @@ class LLMAlternativeWriter:
         for _ in range(self._retries + 1):
             reply = complete(self._config, messages, post)
             try:
-                return clean_diff(reply)
-            except CriticError as e:
+                return clean_diff(diff_from_reply(reply, ws) if ws else reply)
+            except (CriticError, SynthesisError) as e:
                 last = str(e)
                 messages += [
                     {"role": "assistant", "content": reply},
-                    {"role": "user", "content": f"Rejected: {last}\nReturn only a valid raw diff."},
+                    {"role": "user", "content": f"Rejected: {last}\n"
+                     + ("Reply with valid edits JSON only." if ws else "Return only a valid raw diff.")},
                 ]
         raise CriticError(f"no valid alternative after {self._retries + 1} attempts: {last}")
+
+
+def _failed_nodes(out: Path, f2p: set[str]) -> tuple[list[str], list[str]]:
+    """(failing feature tests, failing other tests) from the trial's per-test results, ([], []) if unreadable."""
+    found = sorted(out.rglob("verifier/results.json")) if out.is_dir() else []
+    if not found:
+        return [], []
+    try:
+        results = json.loads(found[-1].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], []
+    bad = sorted(n for n, status in results.items() if status not in ("passed", "skipped")) if isinstance(results, dict) else []
+    return [n for n in bad if n in f2p], [n for n in bad if n not in f2p]
 
 
 def critique_tests(
@@ -168,6 +194,7 @@ def critique_tests(
         name = f"alt-{index}"
         reason = ""
         reward: float | None = None
+        broke: tuple[str, ...] = ()
         try:
             diff = writer.write(instruction, reference)
             diff = clean_diff(diff)
@@ -186,15 +213,23 @@ def critique_tests(
             reason = "trial crashed; no executable verdict"
         elif reward < 1.0:
             # The alternative's correctness is the model's claim, not a measurement: a buggy patch
-            # scores the same. So this is a signal for a person to check, not a verdict.
-            reason = (
-                f"tests too narrow (or the alternative is wrong; review the failing F2P nodes):"
-                f" the alternative scored {reward:.2f} < 1.0 on {len(f2p)} F2P nodes"
-            )
-        results.append(Alternative(name, reward, reward == 1.0, reason))
+            # scores the same. So this is a signal for a person to check, not a verdict. The per-test
+            # results say which kind of failure it was.
+            failed_f2p, failed_other = _failed_nodes(work / "jobs" / name, set(map(str, f2p)))
+            if failed_other and not failed_f2p:
+                broke = tuple(failed_other[:5])
+                reason = (f"the alternative passes every feature test but breaks existing test(s) {', '.join(broke)}:"
+                          f" the alternative is wrong, not the tests")
+            else:
+                shown = f" ({', '.join(failed_f2p[:5])})" if failed_f2p else ""
+                reason = (
+                    f"tests too narrow (or the alternative is wrong; review the failing F2P nodes):"
+                    f" the alternative scored {reward:.2f} < 1.0, failing {len(failed_f2p) or len(f2p)} F2P nodes{shown}"
+                )
+        results.append(Alternative(name, reward, reward == 1.0, reason, broke))
 
     reasons = [a.reason for a in results if a.reason]
-    if not any(a.passed or a.too_narrow for a in results):
+    if not any(a.passed or a.too_narrow or a.broke_existing for a in results):
         reasons.append("no valid alternative implementation could be executed")
     return TestCritique(task.name, tuple(results), tuple(reasons))
 
