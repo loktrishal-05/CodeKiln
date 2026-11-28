@@ -1,0 +1,51 @@
+{
+  "tasks": [
+    "click-completion-enabled",
+    "click-parse-bool",
+    "click-parse-json-param",
+    "click-prompt-int-range",
+    "click-result-contains"
+  ],
+  "reward": [
+    [
+      1.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      1.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      1.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      1.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  ],
+  "overlap_threshold": 0.5,
+  "overlaps": [],
+  "broken": [],
+  "crashed": [],
+  "distinct": true
+}

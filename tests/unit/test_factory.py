@@ -64,6 +64,7 @@ def test_every_candidate_is_gated_and_packaged_with_evidence(tmp_path: Path) -> 
         receipt = json.loads((package / "generation_receipt.json").read_text())
         assert receipt["gates"]["state_c_all_pass"] is True
         assert receipt["gates"]["mutation_semantic_kill_rate"] == 1.0  # measured by the probes
+        assert receipt["gates"]["nop_rewards"] == [0.0] * 3 and receipt["gates"]["oracle_rewards"] == [1.0] * 3
         assert receipt["cost_usd"] > 0 and receipt["spec_sha256"]
         assert (package / "mutation_dossier.json").is_file()  # the evidence travels with the package
 
