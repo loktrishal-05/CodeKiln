@@ -11,11 +11,12 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from codekiln.billing.ledger import Budget
+from codekiln.billing.ledger import Budget, BudgetExceeded
 from codekiln.config import Settings
 from codekiln.orchestrator import Chooser, Decision, Pending, pick
 from codekiln.packaging.packager import PackageRejected, PackageSpec, promote
 from codekiln.packaging.scrubber import audit_task
+from codekiln.repair import repair
 from codekiln.states import State
 from codekiln.synthesis.llm_router import Writer
 from codekiln.synthesis.runner import synthesize
@@ -56,6 +57,10 @@ class Context:
     verify_run: Run | None = None
     probe_run: ProbeRun | None = None
     corpus: Sequence[Path] = ()
+    writer: Writer | None = None  # set => a gate-rejected candidate gets one corrected attempt
+    workspace: Path | None = None
+    repo: str = ""
+    commit: str = ""
 
 
 def _reject(con: sqlite3.Connection, cid: int, reason: str) -> None:
@@ -121,6 +126,23 @@ STAGES: dict[str, Callable[[Context, int, Path], None]] = {
 }
 
 
+# A rejection the writer can act on; a firewall or packaging verdict is not something it can fix.
+_REPAIRABLE = ("STATE_", "mutation")
+
+
+def _try_repair(ctx: Context, cid: int, package: Path, budget: Budget | None) -> bool:
+    status, _, reason = _row(ctx.con, cid)
+    if ctx.writer is None or status != State.REJECTED.value or not (reason or "").startswith(_REPAIRABLE):
+        return False
+    try:
+        if budget is not None:
+            budget.start_candidate(cid)  # the retry is billed to the candidate it repairs
+            budget.guard()
+        return repair(ctx.con, cid, ctx.writer, ctx.workspace, package, ctx.repo, ctx.commit)
+    except BudgetExceeded:
+        return False
+
+
 def _row(con: sqlite3.Connection, cid: int) -> tuple[str, str, str | None]:
     status, path, reason = con.execute(
         "SELECT c.status, p.package_path, c.rejection_reason FROM task_candidates c"
@@ -163,8 +185,12 @@ def run_factory(
     synth = synthesize(con, run_id, writer, staging, budget=budget, workspace=workspace)
     out.steps += 1
     out.stopped = synth.stopped
+    repo, commit = con.execute(
+        "SELECT r.url, r.base_commit FROM factory_runs f JOIN repositories r ON r.id = f.repo_id WHERE f.id = ?",
+        (run_id,)).fetchone()
     ctx = Context(con, db, work, dest, runs, model,
-                  cost_usd=0.0, verify_run=verify_run or harbor_runner.run, probe_run=probe_run, corpus=corpus)
+                  cost_usd=0.0, verify_run=verify_run or harbor_runner.run, probe_run=probe_run, corpus=corpus,
+                  writer=writer, workspace=workspace, repo=repo, commit=commit)
     ids = [r[0] for r in con.execute("SELECT id FROM task_candidates WHERE run_id = ? ORDER BY id", (run_id,))]
     stuck: set[int] = set()  # a gate that did not move its candidate is not retried in this call
     while out.steps < max_steps:
@@ -181,6 +207,8 @@ def run_factory(
         )
         STAGES[chosen.stage](ctx, chosen.candidate_id, Path(chosen.package))
         out.steps += 1
+        if _try_repair(ctx, chosen.candidate_id, Path(chosen.package), budget):
+            continue  # a corrected package is back at BLIND_READER_OK: verify it from the start
         if _row(con, chosen.candidate_id)[0] == chosen.status:
             stuck.add(chosen.candidate_id)
     for cid in ids:

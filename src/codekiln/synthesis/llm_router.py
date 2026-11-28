@@ -40,7 +40,10 @@ class RouterError(RuntimeError):
 class Writer(Protocol):
     """Anything the pipeline can call to turn one plan slot into one spec."""
 
-    def write(self, plan: Plan, *, repo: str, base_commit: str) -> FeatureSpec: ...
+    def write(
+        self, plan: Plan, *, repo: str, base_commit: str,
+        previous: FeatureSpec | None = None, feedback: str = "",
+    ) -> FeatureSpec: ...
 
 
 @dataclass(frozen=True)
@@ -116,11 +119,25 @@ class LLMWriter:
         self._post = post or http_post
         self._retries = retries
 
-    def write(self, plan: Plan, *, repo: str, base_commit: str) -> FeatureSpec:
+    def write(
+        self, plan: Plan, *, repo: str, base_commit: str,
+        previous: FeatureSpec | None = None, feedback: str = "",
+    ) -> FeatureSpec:
+        """A new spec for PLAN; with PREVIOUS and FEEDBACK, a corrected one: the previous attempt plus
+        what really happened when it was executed (real pytest output, surviving mutants)."""
         base = [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": render_prompt(plan, repo=repo, base_commit=base_commit)},
         ]
+        if previous is not None:
+            base += [
+                {"role": "assistant", "content": json.dumps(previous.to_dict())},
+                {"role": "user", "content": (
+                    "That attempt was EXECUTED and failed. What actually happened:\n" + feedback
+                    + "\n\nFix the cause and return the complete corrected spec as JSON, using `edits` as "
+                    "before (not reference_diff). Change only what the failure requires.\n" + FORMAT_RULES
+                )},
+            ]
         messages = base
         last = "no attempt made"
         for _ in range(self._retries + 1):
