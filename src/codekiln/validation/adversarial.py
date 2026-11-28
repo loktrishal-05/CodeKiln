@@ -7,10 +7,16 @@ never excused by the writer's claim that it was "tricky".
 """
 import json
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Protocol
 
-from codekiln.synthesis.edits import EDITS_FORMAT, diff_from_reply, reference_context
+from codekiln.synthesis.edits import (
+    AGENT_MAX_TOKENS,
+    EDITS_FORMAT,
+    diff_from_reply,
+    reference_context,
+)
 from codekiln.synthesis.llm_router import ModelConfig, Post, complete
 from codekiln.synthesis.models import SynthesisError
 from codekiln.validation.mutation_probe import Mutant, patch_problem
@@ -49,7 +55,7 @@ class LLMAdversarialWriter:
 
     def __init__(self, config: ModelConfig, post: Post | None = None, retries: int = 1,
                  workspace: Path | None = None) -> None:
-        self._config = config
+        self._config = replace(config, max_tokens=min(config.max_tokens, AGENT_MAX_TOKENS))
         self._post = post
         self._retries = retries
         self._workspace = workspace  # the repo at the base commit: with it the model sends edits, code builds the diff
