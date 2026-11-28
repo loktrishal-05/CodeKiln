@@ -192,3 +192,40 @@ def test_cli_ideate_keeps_other_slots_when_one_fails_and_tags_candidate_ids(
     reports = json.loads(out.read_text())
     assert [r["candidate_id"] for r in reports] == ids  # both slots reported, each tagged
     assert all(r["ok"] is False for r in reports)
+
+
+def test_cli_ideate_gives_the_writer_the_repo_checkout_so_its_edits_can_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real run: every proposal failed with 'edits need the repo checkout; none is available', because
+    ideate passed the stored plan to the writer without the checkout the factory gives it."""
+    from codekiln.pipeline import workspace_path
+
+    db = tmp_path / "k.sqlite"
+    con = connect(str(db))
+    con.execute("INSERT INTO repositories (url, base_commit) VALUES (?, ?)", (REPO, SHA))
+    rid = con.execute("SELECT id FROM repositories").fetchone()[0]
+    con.execute("INSERT INTO factory_runs (repo_id, mode, slots) VALUES (?, 'dual', 1)", (rid,))
+    run_id = con.execute("SELECT id FROM factory_runs").fetchone()[0]
+    con.execute("INSERT INTO task_candidates (run_id, idempotency_key, category, status) VALUES (?, ?, 'api_cli', ?)",
+                (run_id, idempotency_key(REPO, SHA, "dual", 0), State.DIVERSITY_OK.value))
+    cid = con.execute("SELECT id FROM task_candidates").fetchone()[0]
+    con.execute("INSERT INTO task_plans (candidate_id, plan_json) VALUES (?, ?)", (cid, dump_plan(PLAN)))
+    con.commit()
+    con.close()
+    checkout = workspace_path(REPO, SHA, tmp_path / "ws")
+    checkout.mkdir(parents=True)
+    seen: list[str] = []
+
+    def write(self: LLMWriter, plan: Plan, *, repo: str, base_commit: str, **_: object) -> FeatureSpec:
+        seen.append(plan.workspace)
+        return make_spec()
+
+    monkeypatch.setattr(LLMWriter, "write", write)
+    monkeypatch.setenv("CODEKILN_DB_PATH", str(db))
+    monkeypatch.setenv("CODEKILN_LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("CODEKILN_BILLING_LEDGER", str(tmp_path / "billing.csv"))
+    res = CliRunner().invoke(app, ["ideate", str(run_id), "--candidates", "1", "--workdir", str(tmp_path / "ws"),
+                                   "--out", str(tmp_path / "i.json")])
+    assert res.exit_code == 0, res.output
+    assert seen == [str(checkout)]

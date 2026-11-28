@@ -31,6 +31,7 @@ base commit, and no upstream behaviour may be removed to make room for it.
 
 
 USER_AGENT = "codekiln/0.1 (+https://github.com/loktrishal-05/CodeKiln)"
+EMPTY_RETRIES = 1
 
 
 class RouterError(RuntimeError):
@@ -71,19 +72,22 @@ def complete(config: ModelConfig, messages: list[dict[str, str]], post: Post) ->
         "max_tokens": config.max_tokens,
     }
     headers = {"Authorization": f"Bearer {config.api_key}", "Content-Type": "application/json"}
-    try:
-        data = post(url, headers, payload)
-    except RouterError:
-        raise
-    except OSError as e:  # connection refused, DNS, TLS, timeout
-        raise RouterError(f"provider unreachable: {e}") from e
-    try:
-        content = data["choices"][0]["message"]["content"]  # type: ignore[index]
-    except (KeyError, IndexError, TypeError) as e:
-        raise RouterError("provider response has no choices[0].message.content") from e
-    if not isinstance(content, str) or not content.strip():
-        raise RouterError("provider returned an empty completion")
-    return content
+    for _ in range(EMPTY_RETRIES + 1):
+        try:
+            data = post(url, headers, payload)
+        except RouterError:
+            raise
+        except OSError as e:  # connection refused, DNS, TLS, timeout
+            raise RouterError(f"provider unreachable: {e}") from e
+        try:
+            content = data["choices"][0]["message"]["content"]  # type: ignore[index]
+        except (KeyError, IndexError, TypeError) as e:
+            raise RouterError("provider response has no choices[0].message.content") from e
+        if isinstance(content, str) and content.strip():
+            return content
+        # A small reasoning model sometimes spends its whole budget thinking and returns nothing (seen
+        # on a real run): the same request is worth one more try before the call is given up.
+    raise RouterError("provider returned an empty completion")
 
 
 def parse_spec(text: str, workspace: Path | None = None) -> FeatureSpec:

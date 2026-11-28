@@ -243,3 +243,37 @@ def test_checkout_for_package_reuses_an_existing_checkout_and_never_guesses(tmp_
     assert checkout_for_package(pkg, tmp_path / "ws") == dest  # already there: no network
     (pkg / "task.toml").write_text("[metadata]\n", encoding="utf-8", newline="\n")
     assert checkout_for_package(pkg, tmp_path / "ws") is None  # no repo or commit recorded
+
+
+def test_a_writer_asks_for_a_small_output_budget_so_it_fits_a_free_tier_minute(tmp_path: Path) -> None:
+    """Real run: the default 8000 requested output tokens plus the prompt exceeded a small model's
+    8000-token-per-minute limit (HTTP 413) on every request."""
+    from codekiln.synthesis.edits import AGENT_MAX_TOKENS
+    from codekiln.validation.adversarial import LLMAdversarialWriter
+    from codekiln.validation.test_critic import LLMAlternativeWriter
+
+    root, sizes = repo(tmp_path / "r"), []
+
+    def post(url, headers, payload):  # type: ignore[no-untyped-def]
+        sizes.append(payload["max_tokens"])
+        return {"choices": [{"message": {"content": GOOD_EDITS}}]}
+
+    for writer in (LLMAlternativeWriter, LLMAdversarialWriter):
+        writer(CFG, post=post, workspace=root).write("do it", REF)
+    assert sizes == [AGENT_MAX_TOKENS, AGENT_MAX_TOKENS] and AGENT_MAX_TOKENS < CFG.max_tokens
+
+
+def test_an_empty_completion_is_retried_once_and_then_given_up() -> None:
+    from codekiln.synthesis.llm_router import RouterError, complete
+
+    empty, ok = {"choices": [{"message": {"content": ""}}]}, {"choices": [{"message": {"content": "hi"}}]}
+    calls: list[int] = []
+
+    def flaky(url, headers, payload):  # type: ignore[no-untyped-def]
+        calls.append(1)
+        return ok if len(calls) == 2 else empty
+
+    assert complete(CFG, [{"role": "user", "content": "x"}], flaky) == "hi" and len(calls) == 2
+    calls.clear()
+    with pytest.raises(RouterError, match="empty completion"):
+        complete(CFG, [{"role": "user", "content": "x"}], lambda *_: empty)

@@ -22,6 +22,10 @@ from pathlib import Path, PurePosixPath
 from codekiln.synthesis.models import SynthesisError
 
 MAX_EDITS = 12
+# An edits reply is short. Providers count the requested output budget against a per-minute token limit
+# (Groq's free tier: 8000 for a small model), so asking for the default 8000 made every request fail with
+# HTTP 413 before the prompt even fit.
+AGENT_MAX_TOKENS = 4000
 
 # What a writer is told when it must propose code without seeing line numbers (shared by every agent that
 # proposes a patch: the test critic's alternative solution, the adversarial mutants).

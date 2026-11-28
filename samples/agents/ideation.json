@@ -1,0 +1,190 @@
+[
+  {
+    "ok": true,
+    "category": "core_logic",
+    "baseline": "click-enum-param-type",
+    "proposed": 2,
+    "kept": [
+      {
+        "task": "click-enum-param-type",
+        "category": "core_logic",
+        "difficulty": "L2",
+        "instruction": "# Enum Parameter Type\n\n## Requirements\n- REQ-1: `click.types.EnumParamType(enum_cls)` creates a parameter type that converts string inputs to the matching enum member.\n- REQ-2: `EnumParamType.convert` raises `click.BadParameter` if the input string does not match any enum member name.\n- REQ-3: `EnumParamType.shell_complete` returns completion items for all enum member names.\n- REQ-4: `EnumParamType` raises `TypeError` if the provided class is not a subclass of `enum.Enum`.\n\n## Errors\n- `TypeError` when `enum_cls` is not an enum subclass.\n- `click.BadParameter` when a string value is not a valid enum member name.\n",
+        "reference_diff": "diff --git a/src/click/types.py b/src/click/types.py\n--- a/src/click/types.py\n+++ b/src/click/types.py\n@@ -905,6 +905,50 @@\n \n     def __repr__(self) -> str:\n         return \"UUID\"\n+\n+\n+class EnumParamType(ParamType[enum.Enum]):\n+    \"\"\"A parameter type that converts string inputs to enum members.\n+\n+    :param enum_cls: The enum class to use for conversion.\n+    \"\"\"\n+\n+    def __init__(self, enum_cls: type[enum.Enum]) -> None:\n+        if not issubclass(enum_cls, enum.Enum):\n+            raise TypeError(f\"{enum_cls!r} is not an enum subclass\")\n+        self.enum_cls = enum_cls\n+\n+    def convert(\n+        self, value: t.Any, param: Parameter | None, ctx: Context | None\n+    ) -> enum.Enum:\n+        if isinstance(value, self.enum_cls):\n+            return value\n+\n+        if isinstance(value, str):\n+            try:\n+                return self.enum_cls[value]\n+            except KeyError:\n+                self.fail(\n+                    f\"Invalid value for {param.name if param else 'parameter'}: {value!r} is not a valid {self.enum_cls.__name__} member.\",\n+                    param,\n+                    ctx,\n+                )\n+\n+        self.fail(\n+            f\"Invalid value for {param.name if param else 'parameter'}: expected a string or {self.enum_cls.__name__} member, got {type(value).__name__}.\",\n+            param,\n+            ctx,\n+        )\n+\n+    def shell_complete(\n+        self, ctx: Context, param: Parameter, incomplete: str\n+    ) -> list[CompletionItem]:\n+        return [\n+            CompletionItem(member.name)\n+            for member in self.enum_cls\n+            if member.name.startswith(incomplete)\n+        ]\n+\n \n \n class FileInfoDict(ParamTypeInfoDict):\n",
+        "feature_tests": {
+          "test_enum_param_type.py": "import enum\nimport pytest\nfrom click import BadParameter\nfrom click.types import EnumParamType\n\nclass Color(enum.Enum):\n    RED = \"red\"\n    GREEN = \"green\"\n    BLUE = \"blue\"\n\ndef test_req1_convert_valid_string():\n    et = EnumParamType(Color)\n    assert et.convert(\"RED\", None, None) is Color.RED\n    assert et.convert(\"GREEN\", None, None) is Color.GREEN\n\ndef test_req2_convert_invalid_string():\n    et = EnumParamType(Color)\n    with pytest.raises(BadParameter):\n        et.convert(\"YELLOW\", None, None)\n\ndef test_req3_shell_complete():\n    et = EnumParamType(Color)\n    items = et.shell_complete(None, None, \"\")\n    names = [item.value for item in items]\n    assert \"RED\" in names\n    assert \"GREEN\" in names\n    assert \"BLUE\" in names\n    \n    filtered = et.shell_complete(None, None, \"R\")\n    filtered_names = [item.value for item in filtered]\n    assert \"RED\" in filtered_names\n    assert \"GREEN\" not in filtered_names\n\ndef test_req4_type_error_non_enum():\n    with pytest.raises(TypeError):\n        EnumParamType(str)"
+        },
+        "f2p": [
+          "tests/test_enum_param_type.py::test_req1_convert_valid_string",
+          "tests/test_enum_param_type.py::test_req2_convert_invalid_string",
+          "tests/test_enum_param_type.py::test_req3_shell_complete",
+          "tests/test_enum_param_type.py::test_req4_type_error_non_enum"
+        ],
+        "requirements": [
+          {
+            "id": "REQ-1",
+            "statement": "EnumParamType converts valid string inputs to enum members",
+            "tests": [
+              "tests/test_enum_param_type.py::test_req1_convert_valid_string"
+            ]
+          },
+          {
+            "id": "REQ-2",
+            "statement": "EnumParamType raises BadParameter for invalid string inputs",
+            "tests": [
+              "tests/test_enum_param_type.py::test_req2_convert_invalid_string"
+            ]
+          },
+          {
+            "id": "REQ-3",
+            "statement": "EnumParamType provides shell completion for enum member names",
+            "tests": [
+              "tests/test_enum_param_type.py::test_req3_shell_complete"
+            ]
+          },
+          {
+            "id": "REQ-4",
+            "statement": "EnumParamType raises TypeError if the class is not an enum subclass",
+            "tests": [
+              "tests/test_enum_param_type.py::test_req4_type_error_non_enum"
+            ]
+          }
+        ]
+      }
+    ],
+    "rejected": [
+      {
+        "task": "click-enum-param-type",
+        "reason": "duplicate task name among kept proposals; too similar to baseline/kept (Jaccard 0.82 > 0.50)"
+      }
+    ],
+    "candidate_id": 1
+  },
+  {
+    "ok": false,
+    "category": "core_logic",
+    "baseline": "click-formatting-compact-dl",
+    "proposed": 2,
+    "kept": [],
+    "rejected": [
+      {
+        "task": "proposal-0",
+        "reason": "writer: provider returned HTTP 429: Request too large for model `qwen/qwen3.8-27b` in organization `org_01m8egyd5ce4m8hcey2dzsv2bw` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1241. The request's expected output tokens exceed the enforce"
+      },
+      {
+        "task": "click-formatting-compact-dl",
+        "reason": "slot has no planned symbol named in the instruction: ['HelpFormatter', 'iter_rows', 'join_options']"
+      }
+    ],
+    "candidate_id": 2
+  },
+  {
+    "ok": false,
+    "category": "core_logic",
+    "baseline": "",
+    "proposed": 2,
+    "kept": [],
+    "rejected": [
+      {
+        "task": "proposal-0",
+        "reason": "writer: provider returned HTTP 429: Request too large for model `qwen/qwen3.8-27b` in organization `org_01m8egyd5ce4m8hcey2dzsv2bw` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1184. The request's expected output tokens exceed the enforce"
+      },
+      {
+        "task": "proposal-1",
+        "reason": "writer: provider returned HTTP 429: Request too large for model `qwen/qwen3.8-27b` in organization `org_01m8egyd5ce4m8hcey2dzsv2bw` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1241. The request's expected output tokens exceed the enforce"
+      }
+    ],
+    "candidate_id": 3
+  },
+  {
+    "ok": false,
+    "category": "cross_module",
+    "baseline": "",
+    "proposed": 2,
+    "kept": [],
+    "rejected": [
+      {
+        "task": "proposal-0",
+        "reason": "writer: provider returned HTTP 429: Request too large for model `qwen/qwen3.8-27b` in organization `org_01m8egyd5ce4m8hcey2dzsv2bw` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1241. The request's expected output tokens exceed the enforce"
+      },
+      {
+        "task": "proposal-1",
+        "reason": "writer: provider returned HTTP 429: Request too large for model `qwen/qwen3.8-27b` in organization `org_01m8egyd5ce4m8hcey2dzsv2bw` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1241. The request's expected output tokens exceed the enforce"
+      }
+    ],
+    "candidate_id": 4
+  },
+  {
+    "ok": true,
+    "category": "core_logic",
+    "baseline": "click-completion-item-filter",
+    "proposed": 2,
+    "kept": [
+      {
+        "task": "click-completion-item-filter",
+        "category": "api_cli",
+        "difficulty": "L2",
+        "instruction": "# Completion Item Filtering\n\n## Requirements\n- REQ-1: `click.shell_completion.filter_completion_items(items: list[CompletionItem[str]], prefix: str) -> list[CompletionItem[str]]` returns a new list containing only items whose `value` starts with `prefix`.\n- REQ-2: `filter_completion_items` returns an empty list if `prefix` is an empty string.\n- REQ-3: `filter_completion_items` returns an empty list if `items` is an empty list.\n\n## Errors\n- `TypeError` is raised if `items` is not a list.\n- `TypeError` is raised if `prefix` is not a string.\n",
+        "reference_diff": "diff --git a/src/click/shell_completion.py b/src/click/shell_completion.py\n--- a/src/click/shell_completion.py\n+++ b/src/click/shell_completion.py\n@@ -631,6 +631,25 @@\n     return out\n \n \n+def filter_completion_items(\n+    items: list[CompletionItem[str]], prefix: str\n+) -> list[CompletionItem[str]]:\n+    \"\"\"Filter a list of completion items by a prefix.\n+\n+    :param items: The list of completion items to filter.\n+    :param prefix: The prefix to filter by.\n+    :return: A new list of completion items that match the prefix.\n+    \"\"\"\n+    if not isinstance(items, list):\n+        raise TypeError(\"items must be a list\")\n+    if not isinstance(prefix, str):\n+        raise TypeError(\"prefix must be a string\")\n+    if not prefix:\n+        return []\n+    return [item for item in items if item.value.startswith(prefix)]\n+\n+\n+\n def _is_incomplete_argument(ctx: Context, param: Parameter) -> bool:\n     \"\"\"Determine if the given parameter is an argument that can still\n     accept values.\n",
+        "feature_tests": {
+          "test_completion_filter.py": "import pytest\nfrom click.shell_completion import CompletionItem, filter_completion_items\n\ndef test_req1_filters_by_prefix():\n    items = [\n        CompletionItem(value=\"apple\", help=\"A fruit\"),\n        CompletionItem(value=\"banana\", help=\"A fruit\"),\n        CompletionItem(value=\"apricot\", help=\"A fruit\"),\n    ]\n    result = filter_completion_items(items, \"ap\")\n    assert len(result) == 2\n    assert result[0].value == \"apple\"\n    assert result[1].value == \"apricot\"\n\ndef test_req2_empty_prefix_returns_empty():\n    items = [\n        CompletionItem(value=\"apple\", help=\"A fruit\"),\n        CompletionItem(value=\"banana\", help=\"A fruit\"),\n    ]\n    result = filter_completion_items(items, \"\")\n    assert result == []\n\ndef test_req3_empty_items_returns_empty():\n    result = filter_completion_items([], \"ap\")\n    assert result == []\n\ndef test_error_items_not_list():\n    with pytest.raises(TypeError, match=\"items must be a list\"):\n        filter_completion_items(\"not a list\", \"ap\")\n\ndef test_error_prefix_not_string():\n    items = [CompletionItem(value=\"apple\", help=\"A fruit\")]\n    with pytest.raises(TypeError, match=\"prefix must be a string\"):\n        filter_completion_items(items, 123)\n"
+        },
+        "f2p": [
+          "tests/test_completion_filter.py::test_req1_filters_by_prefix",
+          "tests/test_completion_filter.py::test_req2_empty_prefix_returns_empty",
+          "tests/test_completion_filter.py::test_req3_empty_items_returns_empty",
+          "tests/test_completion_filter.py::test_error_items_not_list",
+          "tests/test_completion_filter.py::test_error_prefix_not_string"
+        ],
+        "requirements": [
+          {
+            "id": "REQ-1",
+            "statement": "filter_completion_items returns items whose value starts with prefix",
+            "tests": [
+              "tests/test_completion_filter.py::test_req1_filters_by_prefix"
+            ]
+          },
+          {
+            "id": "REQ-2",
+            "statement": "filter_completion_items returns empty list for empty prefix",
+            "tests": [
+              "tests/test_completion_filter.py::test_req2_empty_prefix_returns_empty"
+            ]
+          },
+          {
+            "id": "REQ-3",
+            "statement": "filter_completion_items returns empty list for empty items",
+            "tests": [
+              "tests/test_completion_filter.py::test_req3_empty_items_returns_empty"
+            ]
+          }
+        ]
+      }
+    ],
+    "rejected": [
+      {
+        "task": "proposal-0",
+        "reason": "writer: provider returned HTTP 429: Request too large for model `qwen/qwen3.8-27b` in organization `org_01m8egyd5ce4m8hcey2dzsv2bw` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1217. The request's expected output tokens exceed the enforce"
+      }
+    ],
+    "candidate_id": 5
+  },
+  {
+    "ok": false,
+    "category": "core_logic",
+    "baseline": "click-prompt-default",
+    "proposed": 2,
+    "kept": [],
+    "rejected": [
+      {
+        "task": "proposal-0",
+        "reason": "writer: provider returned HTTP 429: Request too large for model `qwen/qwen3.8-27b` in organization `org_01m8egyd5ce4m8hcey2dzsv2bw` service tier `on_demand` on output tokens per minute (OTPM): Limit 1000, Requested 1018. The request's expected output tokens exceed the enforce"
+      },
+      {
+        "task": "click-prompt-default",
+        "reason": "slot has no planned symbol named in the instruction: ['Editor', 'ProgressBar', 'get_pager_file']"
+      }
+    ],
+    "candidate_id": 6
+  }
+]
