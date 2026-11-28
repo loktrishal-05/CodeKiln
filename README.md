@@ -15,7 +15,7 @@
 </p>
 
 <p align="center">
-  <a href="#results">Results</a> &middot; <a href="#architecture">Architecture</a> &middot; <a href="#workflow">Workflow</a> &middot;
+  <a href="#results">Results</a> &middot; <a href="#system-design">System design</a> &middot; <a href="#architecture">Architecture</a> &middot; <a href="#system-flow">System flow</a> &middot;
   <a href="#security-model">Security</a> &middot; <a href="#quick-start">Quick start</a> &middot; <a href="docs/TECHNICAL.md">Technical notes</a>
 </p>
 
@@ -52,22 +52,32 @@ Each package scores `nop` **0.0** and `oracle` **1.0** under the real Harbor com
 
 Packages, Harbor results, the matrix and red-team reports are in [`samples/`](samples/).
 
+## System design
+
+The big picture: a **host control plane** that holds the secrets and makes every decision, an **execution plane** that runs untrusted code in throwaway no-network containers, and the stores that make every run resumable. Models are reachable only from the host.
+
+<p align="center">
+  <a href="docs/assets/system-design.png"><img src="docs/assets/system-design.png" alt="CodeKiln system design: host control plane, execution plane, stores and external services" width="100%"></a><br>
+  <sub>Click to enlarge. Source: <a href="docs/assets/system-design.mmd"><code>system-design.mmd</code></a>.</sub>
+</p>
+
 ## Architecture
 
-A **host control plane** holds the secrets and makes every decision. An **execution plane** runs untrusted code in throwaway, no-network containers. Models are reachable only from the host.
+The component view, down to the modules: five clusters (intake and planning, task synthesis, trust and validation, packaging and evaluation, state and accounting) with the file that implements each box.
 
 <p align="center">
-  <a href="docs/assets/architecture.png"><img src="docs/assets/architecture.png" alt="CodeKiln component architecture: intake and planning, task synthesis, trust and validation, packaging and evaluation, state and accounting" width="100%"></a><br>
-  <sub>Click to enlarge. Blue: intake and planning &middot; amber: synthesis &middot; green: trust and validation &middot; red: packaging and evaluation &middot; indigo: state and accounting. Source: <a href="docs/assets/architecture.mmd"><code>architecture.mmd</code></a>.</sub>
+  <a href="docs/assets/architecture.png"><img src="docs/assets/architecture.png" alt="CodeKiln component architecture with module names" width="100%"></a><br>
+  <sub>Click to enlarge. Source: <a href="docs/assets/architecture.mmd"><code>architecture.mmd</code></a>.</sub>
 </p>
 
-## Workflow
+## System flow
+
+One candidate, end to end, in numbered steps. Its ledger status, not a model, picks each next stage, so a run can stop and resume anywhere. The package runs through **seven Harbor trials**: one original run (**A**) to record the regression set, three without the solution (**B**, the new tests must fail) and three with it (**C**, everything must pass); then wrong solutions and cheating agents that the tests must catch. A failure sends its real evidence back to the writer, at most twice.
 
 <p align="center">
-  <a href="docs/assets/workflow.png"><img src="docs/assets/workflow.png" alt="Six phases: plan, write, static checks, execute, strength, seal, with gates, the repair loop and the outcomes" width="100%"></a>
+  <a href="docs/assets/system-flow.png"><img src="docs/assets/system-flow.png" alt="CodeKiln system flow: steps 1 to 22 from the operator to a sealed package" width="100%"></a><br>
+  <sub>Click to enlarge. Source: <a href="docs/assets/system-flow.mmd"><code>system-flow.mmd</code></a>.</sub>
 </p>
-
-Every candidate is a row in the ledger, and its status, not a model, picks its next stage, so a run can stop and resume anywhere. The package runs through **seven Harbor trials**: one original run (**A**) to record the regression set, three without the solution (**B**, the new tests must fail) and three with it (**C**, everything must pass), then deliberately wrong solutions that the tests must catch.
 
 ## Security model
 
