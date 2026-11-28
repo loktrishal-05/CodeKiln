@@ -1,0 +1,15 @@
+{
+  "task": "click-result-contains",
+  "ok": true,
+  "too_narrow": false,
+  "alternatives": [
+    {
+      "name": "alt-0",
+      "reward": 1.0,
+      "passed": true,
+      "too_narrow": false,
+      "reason": ""
+    }
+  ],
+  "reasons": []
+}

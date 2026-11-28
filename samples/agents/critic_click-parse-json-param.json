@@ -1,0 +1,20 @@
+{
+  "task": "click-parse-json-param",
+  "ok": false,
+  "too_narrow": false,
+  "alternatives": [
+    {
+      "name": "alt-0",
+      "reward": 0.0,
+      "passed": false,
+      "too_narrow": false,
+      "broke_existing": [
+        "tests/test_imports.py::test_light_imports"
+      ],
+      "reason": "the alternative passes every feature test but breaks existing test(s) tests/test_imports.py::test_light_imports: the alternative is wrong, not the tests"
+    }
+  ],
+  "reasons": [
+    "the alternative passes every feature test but breaks existing test(s) tests/test_imports.py::test_light_imports: the alternative is wrong, not the tests"
+  ]
+}

@@ -282,6 +282,7 @@ def ideate(
     base_url: str | None = None,
     max_budget_usd: float | None = None,
     ledger_csv: Path | None = None,
+    workdir: Path = Path("workspaces"),
     max_tokens: int | None = typer.Option(None, min=1000, help="Cap on output tokens per call (a small model's "
                                           "per-minute limit counts it, so the default 8000 can be refused)."),
 ) -> None:
@@ -291,7 +292,6 @@ def ideate(
     The JSON report carries the admitted specs and the exact reason each other one was dropped.
     """
     from codekiln.billing.ledger import BillingLedger, Budget, BudgetExceeded, Pricing
-    from codekiln.planner.models import load_plan
     from codekiln.synthesis.ideator import ideate as run_ideation
     from codekiln.synthesis.llm_router import LLMWriter, ModelConfig, RouterError, http_post
     from codekiln.synthesis.models import SynthesisError
@@ -325,6 +325,13 @@ def ideate(
             typer.echo(f"run {run_id} not found in the ledger", err=True)
             raise typer.Exit(2)
         repo, base_commit = run
+        from codekiln.pipeline import workspace_path
+        from codekiln.synthesis.runner import build_plan
+
+        checkout = workspace_path(repo, base_commit, workdir)
+        workspace = checkout if checkout.is_dir() else None  # the writers send edits that apply to this checkout
+        if workspace is None:
+            typer.echo(f"warn: no checkout at {checkout}; the model must write raw diffs (rarely applies)", err=True)
         slots = con.execute(
             "SELECT c.id, p.plan_json FROM task_candidates c LEFT JOIN task_plans p"
             " ON p.candidate_id = c.id WHERE c.run_id = ? AND c.status = ? ORDER BY c.id",
@@ -339,7 +346,7 @@ def ideate(
             budget.start_candidate(cid)
             try:
                 budget.guard()
-                report = json.loads(run_ideation(load_plan(plan_json), writer, n=candidates,
+                report = json.loads(run_ideation(build_plan(plan_json, workspace), writer, n=candidates,
                                                  repo=repo, base_commit=base_commit).to_json())
             except BudgetExceeded as e:
                 stopped = f"BUDGET_EXCEEDED: {e}"
