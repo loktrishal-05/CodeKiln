@@ -282,6 +282,8 @@ def ideate(
     base_url: str | None = None,
     max_budget_usd: float | None = None,
     ledger_csv: Path | None = None,
+    max_tokens: int | None = typer.Option(None, min=1000, help="Cap on output tokens per call (a small model's "
+                                          "per-minute limit counts it, so the default 8000 can be refused)."),
 ) -> None:
     """Propose N specs per DIVERSITY_OK slot; a deterministic critic keeps the novel ones.
 
@@ -302,7 +304,7 @@ def ideate(
     try:
         config = ModelConfig(
             base_url=base_url or settings.llm_base_url, api_key=settings.llm_api_key,
-            model=model or settings.llm_model,
+            model=model or settings.llm_model, **({"max_tokens": max_tokens} if max_tokens else {}),
         )
     except RouterError as e:
         typer.echo(str(e), err=True)
