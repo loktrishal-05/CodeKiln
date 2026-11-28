@@ -56,28 +56,207 @@ Packages, Harbor results, the matrix and red-team reports are in [`samples/`](sa
 
 The big picture: a **host control plane** that holds the secrets and makes every decision, an **execution plane** that runs untrusted code in throwaway no-network containers, and the stores that make every run resumable. Models are reachable only from the host.
 
-<p align="center">
-  <a href="docs/assets/system-design.png"><img src="docs/assets/system-design.png" alt="CodeKiln system design: host control plane, execution plane, stores and external services" width="100%"></a><br>
-  <sub>Click to enlarge. Source: <a href="docs/assets/system-design.mmd"><code>system-design.mmd</code></a>.</sub>
-</p>
+```mermaid
+flowchart TB
+  OP(("Operator"))
+  JUDGE(("Judges"))
+
+  subgraph HOST["HOST CONTROL PLANE - secrets live here, every decision is made here"]
+    DRV["Factory driver<br/>ledger status picks the stage"]
+    PLAN["Planner<br/>slots, diversity, L1-L3"]
+    SYN["Synthesizer<br/>writer, edit builder, repair"]
+    STAT["Static gates<br/>validate, RTM, blind reader"]
+    VAL["Validators<br/>3-state gate, mutants, red team"]
+    SEAL["Sealer<br/>scrub, receipt, manifest"]
+  end
+
+  subgraph EXEC["EXECUTION PLANE - throwaway containers, no network"]
+    HAR["Harbor runner<br/>nop, oracle, mutant trials"]
+    VER["Hardened verifier<br/>caps dropped, resource limits"]
+  end
+
+  subgraph STORE["STATE AND ARTIFACTS"]
+    LED[("Ledger<br/>SQLite")]
+    BIL[("Billing ledger<br/>budget cap")]
+    PKG["Sealed packages"]
+    DASH["Dashboard<br/>funnel, matrix, checklist"]
+  end
+
+  REPO{{"Target repo<br/>pinned commit"}}
+  MODEL{{"Chat model<br/>host-only key"}}
+  DOCK{{"Docker"}}
+
+  OP -->|"runs factory"| DRV
+  DRV --> PLAN
+  PLAN -->|"clones, never runs"| REPO
+  DRV --> SYN
+  SYN -->|"proposes only"| MODEL
+  SYN --> STAT --> VAL
+  VAL <-->|"trials and results"| HAR
+  VAL --> VER
+  VAL -.->|"failure evidence"| SYN
+  VAL -->|"all gates pass"| SEAL
+  SEAL --> PKG
+  HAR --> DOCK
+  VER --> DOCK
+  DRV <-->|"every transition"| LED
+  SYN -.->|"every paid call"| BIL
+  LED --> DASH
+  PKG --> DASH
+  JUDGE -->|"re-run nop and oracle"| PKG
+```
 
 ## Architecture
 
-The component view, down to the modules: five clusters (intake and planning, task synthesis, trust and validation, packaging and evaluation, state and accounting) with the file that implements each box.
+The component view, down to the files: five clusters (intake and planning, task synthesis, trust and validation, packaging and evaluation, state and accounting) around the Harbor execution plane.
 
-<p align="center">
-  <a href="docs/assets/architecture.png"><img src="docs/assets/architecture.png" alt="CodeKiln component architecture with module names" width="100%"></a><br>
-  <sub>Click to enlarge. Source: <a href="docs/assets/architecture.mmd"><code>architecture.mmd</code></a>.</sub>
-</p>
+```mermaid
+flowchart LR
+  OP(("Factory<br/>operator"))
+
+  subgraph INTAKE["Intake and planning"]
+    CLI["CLI<br/>[cli.py]"]
+    LOAD["Repository loader<br/>[repo_loader.py]"]
+    PLAN["Reverse and forward planning<br/>[reverse_extract.py,<br/>forward_synth.py]"]
+    DIV["Difficulty and diversity<br/>[difficulty.py,<br/>diversity_guard.py]"]
+    FACT["Factory driver and agent<br/>[factory.py, orchestrator.py]"]
+  end
+
+  subgraph SYNTH["Task synthesis"]
+    SYN["Synthesis runner, Repo Scout<br/>[runner.py, scout.py]"]
+    ROUTER["LLM router<br/>[llm_router.py]"]
+    EDITS["Edit builder<br/>[edits.py]"]
+    RTM["Spec, RTM audit, emitter<br/>[models.py, rtm.py, emit.py]"]
+    REPAIR["Repair and ideator<br/>[repair.py, ideator.py]"]
+  end
+
+  subgraph TRUST["Trust and validation"]
+    BLIND["Blind-reader lint<br/>[blind_reader.py]"]
+    GATE["3-state execution gate<br/>[gate_runner.py, verify.py]"]
+    MUT["Mutation probes, critics<br/>[mutation_probe.py,<br/>adversarial.py, test_critic.py]"]
+    RED["Red team, isolated verifier,<br/>firewall [red_team.py,<br/>verifier_sandbox.py, firewall.py]"]
+  end
+
+  subgraph PACK["Packaging and evaluation"]
+    PKG["Harbor packager and format<br/>[packager.py, harbor.py]"]
+    SCRUB["Security scrubber<br/>[scrubber.py]"]
+    MATRIX["Cross-task matrix<br/>[variation_matrix.py]"]
+    REPORT["Dashboard<br/>[report_builder.py]"]
+    EVAL["Evaluation, calibration<br/>[eval_runner.py,<br/>blind_panel.py, calibration.py]"]
+  end
+
+  subgraph EXEC["Execution plane"]
+    HRUN["Harbor task runner<br/>[harbor_runner.py]"]
+    HARBOR{{"Harbor runtime<br/>Docker, no network"}}
+  end
+
+  subgraph STATE["State and accounting"]
+    DB[("Factory ledger<br/>[db.py]")]
+    STM["Candidate state machine<br/>[states.py]"]
+    BILL[("Cost and budget ledger<br/>[billing/ledger.py]")]
+  end
+
+  REPO{{"Target repository<br/>pallets/click"}}
+  LLM{{"Chat model service<br/>OpenAI-compatible"}}
+
+  OP -->|"invokes"| CLI
+  CLI -->|"loads"| LOAD
+  LOAD -->|"checks out"| REPO
+  CLI -->|"plans"| PLAN
+  PLAN -->|"balances"| DIV
+  CLI -->|"drives"| FACT
+
+  FACT -->|"starts synthesis"| SYN
+  SYN -->|"requests a spec"| ROUTER
+  ROUTER -->|"requests completion"| LLM
+  ROUTER -->|"turns edits into a diff"| EDITS
+  SYN -->|"audits, writes files"| RTM
+  FACT -->|"on a rejection"| REPAIR
+  REPAIR -->|"re-asks with the failure"| ROUTER
+
+  FACT -->|"checks instruction"| BLIND
+  FACT -->|"runs gates"| GATE
+  FACT -->|"runs probes"| MUT
+  CLI -->|"red-teams, grades"| RED
+  FACT -->|"packages"| PKG
+  PKG -->|"scrubs"| SCRUB
+  CLI -->|"compares tasks"| MATRIX
+  CLI -->|"builds report"| REPORT
+  CLI -->|"evaluates"| EVAL
+
+  GATE -->|"executes phases"| HRUN
+  MUT -->|"runs mutants"| HRUN
+  RED -->|"runs cheats"| HRUN
+  MATRIX -->|"oracle trials"| HRUN
+  EVAL -->|"evaluation task"| HRUN
+  HRUN -->|"runs task"| HARBOR
+
+  ROUTER -->|"meters every call"| BILL
+  GATE -->|"advances on pass"| STM
+  REPORT -->|"renders state"| DB
+  STM -->|"persisted in"| DB
+```
 
 ## System flow
 
-One candidate, end to end, in numbered steps. Its ledger status, not a model, picks each next stage, so a run can stop and resume anywhere. The package runs through **seven Harbor trials**: one original run (**A**) to record the regression set, three without the solution (**B**, the new tests must fail) and three with it (**C**, everything must pass); then wrong solutions and cheating agents that the tests must catch. A failure sends its real evidence back to the writer, at most twice.
+One candidate, end to end. Its ledger status, not a model, picks each next stage, so a run can stop and resume anywhere. The package runs through **seven Harbor trials**: one original run (**A**) to record the regression set, three without the solution (**B**, the new tests must fail) and three with it (**C**, everything must pass); then wrong solutions and cheating agents that the tests must catch. A failed gate sends its real evidence back to the writer, at most twice, before the candidate is rejected with the exact reason.
 
-<p align="center">
-  <a href="docs/assets/system-flow.png"><img src="docs/assets/system-flow.png" alt="CodeKiln system flow: steps 1 to 22 from the operator to a sealed package" width="100%"></a><br>
-  <sub>Click to enlarge. Source: <a href="docs/assets/system-flow.mmd"><code>system-flow.mmd</code></a>.</sub>
-</p>
+```mermaid
+flowchart TB
+  START(["Operator runs<br/>codekiln factory REPO --commit SHA"])
+
+  subgraph PLAN["1  PLAN - deterministic, no model"]
+    P1["Clone at the pinned commit<br/>nothing is executed"] --> P2["Import graph and slots<br/>5 categories, L1-L3"] --> P3{"Diversity guard<br/>overlap below 0.4?"}
+  end
+
+  subgraph WRITE["2  WRITE - the model proposes"]
+    W1["Repo Scout<br/>context pack"] --> W2["LLM writes the spec<br/>instruction, tests, edits"] --> W3["Edit builder builds the diff<br/>from the real files"] --> W4{"git apply --check<br/>passes?"}
+  end
+
+  subgraph STATIC["3  STATIC CHECKS - code decides"]
+    S1{"validate and<br/>RTM audit"} --> S2{"Blind-reader<br/>lint"} --> S3["Package emitted<br/>BLIND_READER_OK"]
+  end
+
+  subgraph EXEC["4  EXECUTE - Harbor, no network"]
+    E1["State A x1<br/>regression set"] --> E2{"State B x3<br/>feature tests fail?"} --> E3{"State C x3<br/>everything passes?"}
+  end
+
+  subgraph STRENGTH["5  STRENGTH - do the tests bite?"]
+    T1{"Wrong solutions caught?<br/>semantic at least 80%"} --> T2{"Red team:<br/>does a cheat score?"}
+  end
+
+  subgraph SEAL["6  SEAL"]
+    Z1["Scrub, receipt,<br/>SHA-256 manifest"] --> Z2["Atomic promote"]
+  end
+
+  REP{"Repairs left?<br/>at most 2"}
+  RETRY["Writer retries with the reason<br/>at most 2 format retries"]
+  LOOP["Back to step 2 with the real failure:<br/>pytest output or surviving mutants"]
+  OK(["PACKAGED"])
+  REJ(["REJECTED<br/>exact reason kept"])
+  LED[("Ledger<br/>every transition, trial and paid call")]
+
+  START --> P1
+  P3 -->|"yes"| W1
+  P3 -->|"no"| REJ
+  W4 -->|"yes"| S1
+  W4 -->|"no"| RETRY
+  S1 -->|"fail"| RETRY
+  S2 -->|"fail"| RETRY
+  S3 --> E1
+  E2 -->|"no"| REP
+  E3 -->|"yes"| T1
+  E3 -->|"no"| REP
+  T1 -->|"yes"| T2
+  T1 -->|"no"| REP
+  T2 -->|"no cheat scores"| Z1
+  T2 -->|"a cheat scores"| REJ
+  REP -->|"yes"| LOOP
+  REP -->|"no"| REJ
+  Z2 --> OK
+  OK -.-> LED
+  REJ -.-> LED
+```
 
 ## Security model
 
