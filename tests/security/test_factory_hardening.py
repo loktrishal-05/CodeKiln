@@ -74,12 +74,12 @@ def test_demo_run_script_syntax_and_dry_run(tmp_path: Path):
 
 
 FAKE_CODEKILN = """#!/usr/bin/env bash
-# Stand-in CLI: synth stages one task, then exits 1 as a budget stop does.
+# Stand-in CLI: factory packages one task, then exits 1 as it does when some candidate was rejected.
 cmd="$1"; shift
 case "$cmd" in
   run) "$PYTHON_BIN" -c "import os, sqlite3; c = sqlite3.connect(os.environ['CODEKILN_DB_PATH']); c.execute('CREATE TABLE IF NOT EXISTS factory_runs (id INTEGER PRIMARY KEY)'); c.execute('INSERT INTO factory_runs DEFAULT VALUES'); c.commit()" ;;
-  synth) while [ $# -gt 0 ]; do [ "$1" = "--packages" ] && mkdir -p "$2/click-task-a"; shift; done; exit 1 ;;
-  package) mkdir -p "$2" ;;
+  factory) "$PYTHON_BIN" -c "import os, sqlite3; c = sqlite3.connect(os.environ['CODEKILN_DB_PATH']); c.execute('CREATE TABLE IF NOT EXISTS factory_runs (id INTEGER PRIMARY KEY)'); c.execute('INSERT INTO factory_runs DEFAULT VALUES'); c.commit()"
+    while [ $# -gt 0 ]; do [ "$1" = "--dest" ] && mkdir -p "$2/click-task-a"; shift; done; exit 1 ;;
   report) while [ $# -gt 0 ]; do [ "$1" = "--out" ] && touch "$2"; shift; done ;;
 esac
 exit 0
@@ -87,7 +87,7 @@ exit 0
 
 
 @needs_posix_bash
-def test_demo_run_keeps_going_when_synth_stops_early(tmp_path: Path):
+def test_demo_run_keeps_going_when_some_candidates_are_rejected(tmp_path: Path):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     for name, body in (("codekiln", FAKE_CODEKILN), ("harbor", "#!/usr/bin/env bash\nexit 0\n"),
@@ -103,6 +103,6 @@ def test_demo_run_keeps_going_when_synth_stops_early(tmp_path: Path):
         cwd=ROOT, env=env, capture_output=True, text=True, check=False,
     )
     assert res.returncode == 0, res.stdout + res.stderr
-    assert "synth stopped early" in res.stderr
-    assert "Promoted 1 package(s)" in res.stdout
+    assert "Packaged 1 task(s)" in res.stdout
+    assert "Static HTML report" in res.stdout
 

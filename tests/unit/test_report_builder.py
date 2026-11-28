@@ -1,4 +1,5 @@
 import json
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -84,3 +85,47 @@ def test_unknown_run(tmp_path: Path) -> None:
 def test_heat_scale_ends() -> None:
     assert heat(0.0)[0] == "#2b2f38" and heat(1.0)[0] == "#fff6dc"
     assert heat(1.0)[1] == "#1b2330" and heat(0.0)[1] == "#f4f1ec"  # text stays readable
+
+
+SAMPLES = Path(__file__).resolve().parents[2] / "samples"
+
+
+def test_checklist_on_the_real_sealed_samples_and_their_logged_rewards() -> None:
+    """The five real packages from the factory run: every check passes, and the nop/oracle columns come
+    from the Harbor logs kept beside them (a sealed package cannot hold them)."""
+    html = build_report(_ledger(Path(tempfile.mkdtemp())), 1, SAMPLES, None)
+    check = html.split('id="h-check"')[1].split("</section>")[0]
+    assert check.count(">pass<") == 8 * 5 and ">FAIL<" not in check  # 8 checks x 5 packages
+    tasks = html.split('id="h-tasks"')[1].split("</section>")[0]
+    assert tasks.count("0.00 &times;1") == 5 and tasks.count("1.00 &times;1") == 5
+
+
+def test_checklist_marks_a_broken_package_and_never_guesses(tmp_path: Path) -> None:
+    pkg = tmp_path / "pk"
+    _package(pkg)  # a bare package: no rtm map, no audit, no manifest, and a task.toml without no-network
+    check = build_report(_ledger(tmp_path), 1, pkg, None).split('id="h-check"')[1].split("</section>")[0]
+    rows = {r.split("</th>")[0].split(">")[-1]: r for r in check.split("<tr>")[2:]}
+    for missing in ("Every requirement is mapped to a feature test", "Snapshot, canary, secret scan and diff policy are clean",
+                    "Files are tamper-evident (SHA-256 manifest verifies)"):
+        assert "<td>-</td>" in rows[missing]  # missing evidence is unknown, never a pass and never a failure
+    assert ">FAIL<" in rows["No network while the task runs"]  # a real finding stays a failure
+
+
+def test_funnel_places_a_mutation_rejection_after_state_c_not_after_diversity() -> None:
+    """Real run: 'mutation: ...' (lower case) matched no stage, so candidates that had cleared State C
+    were drawn as dropping right after the diversity check."""
+    from codekiln.evaluation.report_builder import _funnel
+
+    cands = [
+        {"status": "PACKAGED", "rejection_reason": None},
+        {"status": "REJECTED", "rejection_reason": "mutation: semantic kill rate 60% below 80%"},
+        {"status": "REJECTED", "rejection_reason": "STATE_C: reference patch fails: ['t']"},
+    ]
+    html = _funnel(cands)
+
+    def reached(stage: str) -> str:
+        return html.split(f">{stage}<")[1].split('class="num">')[1].split("<")[0]
+
+    assert reached("state b f2p fail") == "3"  # all three passed State B
+    assert reached("state c all pass") == "2"  # the State C rejection did not; the mutation one did
+    assert reached("packaged") == "1"

@@ -25,11 +25,11 @@ The organizers' guide (summarised in `docs/SPEC.md` -> Official rules) changes f
 - [x] **[S]** 4-class mutation probes (>=80% kill), each probe = a Harbor trial with a swapped `solution/`
 - [x] **[C]** Scrubber + Harbor packager (`tests/test.sh` with the official reward formula, `fail_to_pass.json`/`pass_to_pass.json`, `network_mode="no-network"`, separate verifier) + generation receipt + manifest + `security_audit.json`
 - [x] **[S]** Cost ledger + budget breaker + idempotent resume
-- [ ] **[H]** Static HTML dashboard (`codekiln report` -> `factory_report.html`)
+- [x] **[H]** Static HTML dashboard (`codekiln report` -> `factory_report.html`)
 - [ ] **[C]** One-command reproducible run (`scripts/demo_run.sh`, factory Dockerfile so judges can re-run us) + CI hardening; verify end-to-end on click (all, Dec 4-5)
-- [ ] **[H]** Cross-task oracle matrix (`codekiln matrix` -> `variation_matrix.json`) + heatmap in the dashboard
+- [x] **[H]** Cross-task oracle matrix (`codekiln matrix` -> `variation_matrix.json`) + heatmap in the dashboard
 - [x] **[H]** `samples/`: the 5 final click packages + their Harbor nop/oracle logs, committed (exception to the no-generated-output rule)
-- [ ] **[H]** `docs/TECHNICAL.md`: design decisions, assumptions, reused components, every model/tool used, variation strategy, manual-fix log
+- [x] **[H]** `docs/TECHNICAL.md`: design decisions, assumptions, reused components, every model/tool used, variation strategy, manual-fix log
 - [ ] **[H]** Submission assets: video, Hack2Skill deck from the Resources template (all review)
 
 ## Wave 2: finale differentiators (Dec 7 - Dec 19)
@@ -50,14 +50,14 @@ Rule: agents propose, code decides. Every pass/fail stays in the gates, probes, 
 - [x] **[L]** Repo Scout: context packs per click subsystem (#41)
 - [x] **[L]** Contamination firewall: later click releases/issues/PRs + memorisation probe (#42)
 - [x] **[L]** Difficulty calibration from eval results, feeding the L1/L2/L3 dial (#43)
-- [ ] **[S]** Feature Ideator + Critic (#44)
-- [ ] **[S]** Test Author + Test Critic: alternative correct solution, flag too-narrow tests (#45)
-- [ ] **[S]** Adversarial model-written mutants in the mutation probes (#46)
-- [ ] **[S]** Blind solver panel + ambiguity report (#47)
+- [x] **[S]** Feature Ideator + Critic (#44)
+- [x] **[S]** Test Author + Test Critic: alternative correct solution, flag too-narrow tests (#45)
+- [x] **[S]** Adversarial model-written mutants in the mutation probes (#46)
+- [x] **[S]** Blind solver panel + ambiguity report (#47)
 - [x] **[C]** Red-team run in Harbor: an agent tries to cheat each package (#48)
 - [x] **[C]** Separate verifier container (#49)
 - [ ] **[H]** Live agent trace view in the dashboard (#50)
-- [ ] **[H]** Agentic Benchmark Checklist report per package (#51)
+- [x] **[H]** Agentic Benchmark Checklist report per package (#51)
 
 ## Wave 3: production (post-hackathon)
 

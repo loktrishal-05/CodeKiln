@@ -6,6 +6,7 @@ Nothing here trusts a model: every transition is made by a gate that ran (Harbor
 probes, the scrubber). The Harbor runners are injected so the whole loop is testable without Docker.
 """
 import hashlib
+import json
 import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -99,12 +100,29 @@ def _probe(ctx: Context, cid: int, package: Path) -> None:
         _reject(ctx.con, cid, "mutation: " + "; ".join(dossier.reasons))
 
 
+def _trial_rewards(ctx: Context, cid: int, package: Path) -> dict[str, list[float]]:
+    """Rewards of the gate's latest nop (State B) and oracle (State C) trials, by the judges' formula:
+    any regression -> 0.0, else passed feature tests / feature tests. A repaired candidate has older
+    trials of its earlier packages in the ledger, so only the last `runs` of each phase count."""
+    tests = package / "tests"
+    f2p = len(json.loads((tests / "fail_to_pass.json").read_text(encoding="utf-8")))
+    p2p = len(json.loads((tests / "pass_to_pass.json").read_text(encoding="utf-8")))
+    out: dict[str, list[float]] = {}
+    for phase, key in (("B", "nop_rewards"), ("C", "oracle_rewards")):
+        rows = ctx.con.execute(
+            "SELECT f2p_passed, p2p_passed FROM validation_executions WHERE candidate_id = ? AND phase = ?"
+            " ORDER BY id DESC LIMIT ?", (cid, phase, ctx.runs)).fetchall()
+        out[key] = [0.0 if q < p2p else f / f2p for f, q in reversed(rows)]
+    return out
+
+
 def _package(ctx: Context, cid: int, package: Path) -> None:
     dossier = read_dossier(package / "mutation_dossier.json")
     sha = ctx.con.execute("SELECT spec_sha256 FROM task_plans WHERE candidate_id = ?", (cid,)).fetchone()
     spec = PackageSpec(
         package.name, ctx.model, ctx.cost_usd, True,  # True: this stage is only reached through the gates
-        gates={"state_c_all_pass": True, "mutation_semantic_kill_rate": dossier.semantic_kill_rate},
+        gates={"state_c_all_pass": True, "mutation_semantic_kill_rate": dossier.semantic_kill_rate,
+               **_trial_rewards(ctx, cid, package)},
         spec_sha256=(sha[0] or "") if sha else "",
     )
     try:

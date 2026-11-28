@@ -13,6 +13,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
+from codekiln.packaging.packager import verify_manifest
 from codekiln.states import PIPELINE, State
 
 # Incandescence scale for the matrix: cold firebrick -> white heat (reward 0.0 -> 1.0).
@@ -62,7 +63,7 @@ def _funnel(cands: list[dict[str, Any]]) -> str:
     for c in cands:
         if c["status"] == State.REJECTED.value:
             # "STATE_B: ..." names the gate that rejected it; every stage before that was reached
-            gate = (c["rejection_reason"] or "").split(":")[0].strip()
+            gate = (c["rejection_reason"] or "").split(":")[0].strip().upper()  # "mutation:" names MUTATION_OK
             stop = next((i for s, i in order.items() if gate and s.startswith(gate)),
                         order[State.DIVERSITY_OK.value] + 1)
         else:
@@ -106,6 +107,71 @@ def _matrix(m: dict[str, Any] | None) -> str:
             f"<thead><tr><td></td>{head}</tr></thead><tbody>{body}</tbody></table></div>")
 
 
+def _logged(d: Path, agent: str) -> list[float] | None:
+    """The Harbor reward of one `nop`/`oracle` trial kept beside a sealed package (`../harbor_logs/<name>/`).
+
+    A sealed package cannot be edited (its manifest would break), so samples/ keeps its trial results next
+    to it instead of inside it."""
+    p = d.parent / "harbor_logs" / d.name / f"{agent}.json"
+    try:
+        return [float(json.loads(p.read_text(encoding="utf-8"))["reward"])]
+    except (OSError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _checks(d: Path) -> list[tuple[str, bool | None]]:
+    """The validity checklist of one package, each answer read from a file the pipeline wrote (None = unknown)."""
+    p = _package(d)
+    gates, m = _mapping(p["receipt"].get("gates")), p["metrics"]
+
+    def load(name: str) -> dict[str, Any]:
+        try:
+            return _mapping(json.loads((d / name).read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            return {}
+
+    rtm, audit, dossier = load("rtm_map.json"), load("security_audit.json"), load("mutation_dossier.json")
+    probes = dossier.get("probes") or []
+    fixed = [x for x in probes if x.get("kind") in ("nop", "stub", "partial")]
+    kill, threshold = m["mutation_kill_rate"], dossier.get("threshold", 0.8)
+    nop, oracle = m["nop_rewards"], m["oracle_rewards"]
+    env = _mapping(tomllib.loads((d / "task.toml").read_text(encoding="utf-8")).get("environment"))
+    return [
+        ("Every requirement is mapped to a feature test", rtm.get("ok") if rtm else None),
+        ("Feature tests fail without the solution and pass with it",
+         (all(r == 0.0 for r in nop) and all(r == 1.0 for r in oracle)) if nop and oracle
+         else (True if gates.get("state_c_all_pass") else None)),
+        ("Existing tests are guarded (regression set recorded)", (p["p2p"] or 0) > 0 if p["p2p"] is not None else None),
+        ("No network while the task runs", env.get("network_mode") == "no-network"),
+        ("Trivial solutions fail (no-op, stub, partial)", all(x.get("killed") for x in fixed) if fixed else None),
+        ("Wrong implementations fail (mutants killed over the bar)", (kill >= threshold) if kill is not None else None),
+        ("Snapshot, canary, secret scan and diff policy are clean",
+         all(_mapping(audit.get("checks")).values()) if audit.get("checks") else None),
+        ("Files are tamper-evident (SHA-256 manifest verifies)",
+         verify_manifest(d) if (d / "manifest.sha256").exists() else None),
+    ]
+
+
+def _checklist(root: Path | None) -> str:
+    dirs = sorted(d for d in root.iterdir() if (d / "task.toml").exists()) if root else []
+    if not dirs:
+        return _empty("No packaged tasks found.", "codekiln run <repo>")
+    cols = [(d.name, _checks(d)) for d in dirs]
+    head = "".join(f'<th scope="col">{_e(n.removeprefix("click-"))}</th>' for n, _ in cols)
+    rows = ""
+    for i, (label, _) in enumerate(cols[0][1]):
+        cells = ""
+        for _, checks in cols:
+            v = checks[i][1]
+            cells += ('<td class="ok">pass</td>' if v else '<td class="bad">FAIL</td>' if v is False
+                      else "<td>-</td>")
+        rows += f"<tr><th scope=\"row\">{_e(label)}</th>{cells}</tr>"
+    return ('<div class="scroll"><table class="tasks"><thead><tr><th scope="col">Check (task and outcome validity)'
+            f"</th>{head}</tr></thead><tbody>{rows}</tbody></table></div>"
+            '<p class="path">Modelled on the Agentic Benchmark Checklist (arXiv 2507.02825). Every answer is read from a '
+            "file the pipeline wrote; '-' means that file is missing, not that the check passed.</p>")
+
+
 def _package(d: Path) -> dict[str, Any]:
     meta = tomllib.loads((d / "task.toml").read_text(encoding="utf-8")).get("metadata", {})
     instr = (d / "instruction.md").read_text(encoding="utf-8") if (d / "instruction.md").exists() else ""
@@ -124,8 +190,8 @@ def _package(d: Path) -> dict[str, Any]:
     # mutation dossier for the kill rate. Top-level keys win for older receipts.
     metrics = {
         "mutation_kill_rate": receipt.get("mutation_kill_rate", dossier.get("semantic_kill_rate")),
-        "nop_rewards": receipt.get("nop_rewards", gates.get("nop_rewards")),
-        "oracle_rewards": receipt.get("oracle_rewards", gates.get("oracle_rewards")),
+        "nop_rewards": receipt.get("nop_rewards", gates.get("nop_rewards")) or _logged(d, "nop"),
+        "oracle_rewards": receipt.get("oracle_rewards", gates.get("oracle_rewards")) or _logged(d, "oracle"),
     }
     return {"name": d.name, "title": title, "instruction": instr, "meta": meta,
             "f2p": count("fail_to_pass.json"), "p2p": count("pass_to_pass.json"),
@@ -215,6 +281,8 @@ def build_report(
         f"{_matrix(m)}</section>"
         f'<section aria-labelledby="h-tasks"><h2 id="h-tasks">Shipped tasks</h2>'
         f"{_packages(packages)}</section>"
+        f'<section aria-labelledby="h-check"><h2 id="h-check">Is each task valid?</h2>'
+        f"{_checklist(packages)}</section>"
         f'<section aria-labelledby="h-dead"><h2 id="h-dead">Rejected candidates</h2>'
         f"{_graveyard(cands)}</section>"
         f'<section aria-labelledby="h-models"><h2 id="h-models">How models did</h2>'

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CodeKiln run 1: click</title>
+<style>
+  :root {
+    --shelf: #edeff1; --ink: #1b2330; --muted: #5a6573; --rule: #c8ced5;
+    --pass: #2e7a59; --fail: #a8321f; --brick: #2b2f38;
+    --sans: "Seravek", "Gill Sans Nova", "Gill Sans", Ubuntu, Calibri, "Trebuchet MS", sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--shelf); color: var(--ink); font: 1rem/1.5 var(--sans);
+         font-variant-numeric: tabular-nums; }
+  main { max-width: 70rem; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  header { border-bottom: 3px solid var(--brick); padding-bottom: 1.5rem; margin-bottom: 1rem; }
+  h1 { font-size: 2.6rem; line-height: 1.1; font-weight: 600; letter-spacing: -0.01em;
+       margin: 0 0 0.75rem; max-width: 30ch; }
+  .lede { font-size: 1.3rem; margin: 0; max-width: 60ch; }
+  .commit { color: var(--muted); margin: 0.75rem 0 0; }
+  code, pre { font-family: var(--mono); font-size: 0.85em; }
+  section { padding: 2rem 0 0.5rem; }
+  h2 { font-size: 1.35rem; font-weight: 600; margin: 0 0 1rem; }
+  .empty { color: var(--muted); }
+  .ok { color: var(--pass); font-weight: 600; }
+  .bad { color: var(--fail); font-weight: 600; }
+
+  .funnel { list-style: none; padding: 0; margin: 0; max-width: 46rem; }
+  .funnel li { display: grid; grid-template-columns: 11rem 1fr 3rem; gap: 0.75rem;
+               align-items: center; padding: 0.15rem 0; }
+  .funnel .stage { color: var(--muted); }
+  .funnel .bar { height: 0.9rem; width: var(--w); min-width: 2px; background: var(--brick); }
+  .funnel li:last-child .bar { background: var(--pass); }
+  .funnel .num { text-align: right; }
+
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; }
+  caption { caption-side: bottom; text-align: left; color: var(--muted); padding-top: 0.6rem;
+            font-size: 0.9rem; }
+  .matrix td, .matrix th { padding: 0; }
+  .matrix tbody td { width: 4.5rem; height: 3.25rem; text-align: center; font-size: 0.95rem;
+                     border: 2px solid var(--shelf); }
+  .matrix th { background: var(--shelf); font-weight: 500; }
+  .matrix tbody th { text-align: right; padding-right: 0.75rem; white-space: nowrap; }
+  .matrix thead th { height: 9rem; vertical-align: bottom; }
+  .matrix thead th span { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg);
+                          padding-bottom: 0.5rem; white-space: nowrap; }
+  .matrix thead td { background: var(--shelf); }
+
+  .tasks, .models { width: 100%; background: #fff; }
+  .tasks th, .tasks td, .models th, .models td { padding: 0.55rem 0.75rem; text-align: left;
+                                                  border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .tasks thead th, .models thead th { font-weight: 600; font-size: 0.9rem; color: var(--muted);
+                                       border-bottom: 2px solid var(--ink); }
+  td.n, th.n { text-align: right; }
+  .models { max-width: 32rem; }
+  .models tbody th { font-weight: 500; }
+  details summary { cursor: pointer; font-weight: 500; }
+  details pre { white-space: pre-wrap; max-width: 75ch; background: var(--shelf); padding: 0.75rem;
+                margin: 0.5rem 0; }
+  .path { margin: 0; color: var(--muted); }
+
+  .graveyard { list-style: none; padding: 0; margin: 0; max-width: 60rem; }
+  .graveyard li { padding: 0.5rem 0 0.5rem 1rem; border-left: 3px solid var(--fail); margin-bottom: 0.4rem;
+                  background: #fff; }
+  .graveyard .who { color: var(--muted); margin-right: 0.5rem; }
+
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+  footer { margin-top: 3rem; color: var(--muted); font-size: 0.9rem; }
+  @media (max-width: 40rem) {
+    h1 { font-size: 1.9rem; }
+    .funnel li { grid-template-columns: 8rem 1fr 2.5rem; }
+  }
+  @media print { body { background: #fff; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>CodeKiln run 1: feature tasks fired from click</h1>
+    <p class="lede">5 of 8 candidates from click made it through every gate. Each one asks for different behaviour.</p>
+    <p class="commit">Base commit <code>cf19179e8e2fd54c601378cec9e0d21bb12b6fb1</code></p>
+  </header>
+  <section aria-labelledby="h-funnel"><h2 id="h-funnel">Where candidates stopped</h2><ol class="funnel" aria-label="Candidates reaching each stage"><li><span class="stage">state b f2p fail</span><span class="bar" style="--w:100.0%"></span><span class="num">8</span></li><li><span class="stage">state c all pass</span><span class="bar" style="--w:87.5%"></span><span class="num">7</span></li><li><span class="stage">packaged</span><span class="bar" style="--w:62.5%"></span><span class="num">5</span></li></ol></section><section aria-labelledby="h-matrix"><h2 id="h-matrix">Do the tasks differ?</h2><p class="ok">All 5 tasks are distinct: each reference solution passes only its own tests.</p><div class="scroll"><table class="matrix"><caption>Rows: reference solution. Columns: tests it was run against. Cell: Harbor oracle reward.</caption><thead><tr><td></td><th scope="col"><span>click-completion-enabled</span></th><th scope="col"><span>click-parse-bool</span></th><th scope="col"><span>click-parse-json-param</span></th><th scope="col"><span>click-prompt-int-range</span></th><th scope="col"><span>click-result-contains</span></th></tr></thead><tbody><tr><th scope="row">click-completion-enabled</th><td style="background:#fff6dc;color:#1b2330">1.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td></tr><tr><th scope="row">click-parse-bool</th><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#fff6dc;color:#1b2330">1.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td></tr><tr><th scope="row">click-parse-json-param</th><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#fff6dc;color:#1b2330">1.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td></tr><tr><th scope="row">click-prompt-int-range</th><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#fff6dc;color:#1b2330">1.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td></tr><tr><th scope="row">click-result-contains</th><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#2b2f38;color:#f4f1ec">0.00</td><td style="background:#fff6dc;color:#1b2330">1.00</td></tr></tbody></table></div></section><section aria-labelledby="h-tasks"><h2 id="h-tasks">Shipped tasks</h2><div class="scroll"><table class="tasks"><thead><tr><th scope="col">Task</th><th scope="col">Category</th><th scope="col">Level</th><th scope="col">Feature tests</th><th scope="col">Regression tests</th><th scope="col">nop reward (want 0)</th><th scope="col">oracle reward (want 1)</th><th scope="col">Mutants killed</th></tr></thead><tbody><tr><td><details><summary>Completion enable flag</summary><pre># Completion enable flag
+
+Add a public helper that determines whether shell completion is enabled based on the environment variable ``CLICK_COMPLETION_DISABLED``.
+
+## Requirements
+- REQ-1: ``click.shell_completion.completion_enabled()`` returns ``True`` when the environment variable is not set.
+- REQ-2: ``completion_enabled()`` returns ``False`` when the variable is set to a falsey value (``&quot;0&quot;``, ``&quot;false&quot;``, case‑insensitive).
+- REQ-3: ``completion_enabled()`` returns ``True`` when the variable is set to a truthy value (``&quot;1&quot;``, ``&quot;true&quot;``, case‑insensitive).
+- REQ-4: ``completion_enabled()`` raises ``ValueError`` for any other value.
+
+## Errors
+- ``ValueError`` is raised when the environment variable contains an unrecognised value.
+</pre><p class="path"><code>click-completion-enabled/</code></p></details></td><td>core_logic</td><td>L2</td><td class="n">4</td><td class="n">2434</td><td class="ok">0.00 &times;1</td><td class="ok">1.00 &times;1</td><td class="n">100%</td></tr><tr><td><details><summary>Boolean parsing helper</summary><pre># Boolean parsing helper
+
+## Requirements
+- REQ-1: `click.utils.parse_bool(value: str | bool | None, *, default: bool = False) -&gt; bool` returns a boolean for common truthy/falsy strings.
+- REQ-2: When `value` is ``None`` the function returns the provided ``default``.
+- REQ-3: When `value` is already a ``bool`` it is returned unchanged.
+- REQ-4: When `value` is a string that does not match any known truthy or falsy representation a ``ValueError`` is raised.
+- REQ-5: When `value` is of any other type a ``ValueError`` is raised.
+
+## Errors
+- ``ValueError`` if the string cannot be interpreted as a boolean or if the type is unsupported.
+</pre><p class="path"><code>click-parse-bool/</code></p></details></td><td>core_logic</td><td>L2</td><td class="n">6</td><td class="n">2434</td><td class="ok">0.00 &times;1</td><td class="ok">1.00 &times;1</td><td class="n">100%</td></tr><tr><td><details><summary>JSON parameter parser</summary><pre># JSON parameter parser
+
+## Requirements
+- REQ-1: `click.core.parse_json_param(value: str) -&gt; Any` returns the parsed Python object for a valid JSON string.
+- REQ-2: `parse_json_param` returns ``None`` when the input string is empty.
+- REQ-3: `parse_json_param` raises :class:`click.exceptions.BadParameter` for invalid JSON.
+
+## Errors
+- Raises ``BadParameter`` with a clear message when JSON decoding fails.
+</pre><p class="path"><code>click-parse-json-param/</code></p></details></td><td>core_logic</td><td>L2</td><td class="n">3</td><td class="n">2434</td><td class="ok">0.00 &times;1</td><td class="ok">1.00 &times;1</td><td class="n">100%</td></tr><tr><td><details><summary>Integer range prompt</summary><pre># Integer range prompt
+
+## Requirements
+- REQ-1: `click.termui.prompt_int_range(text: str, min: int | None = None, max: int | None = None, default: int | None = None, hide_input: bool = False, err: bool = False) -&gt; int` prompts the user for an integer and returns it.
+- REQ-2: If `min` is greater than `max` a `ValueError` is raised before prompting.
+- REQ-3: If the entered value is lower than `min` a `ValueError` is raised.
+
+## Errors
+- `ValueError` when bounds are inconsistent or the result is out of range.
+</pre><p class="path"><code>click-prompt-int-range/</code></p></details></td><td>api_cli</td><td>L2</td><td class="n">3</td><td class="n">2434</td><td class="ok">0.00 &times;1</td><td class="ok">1.00 &times;1</td><td class="n">80%</td></tr><tr><td><details><summary>Result output containment helper</summary><pre># Result output containment helper
+
+## Requirements
+- REQ-1: `Result.output_contains(substring: str | t.Sequence[str], case_sensitive: bool = True) -&gt; bool` returns ``True`` when ``substring`` (or any element of the sequence) is found in the captured output according to the ``case_sensitive`` flag, otherwise ``False``.
+- REQ-2: ``Result.output_contains`` raises ``TypeError`` if ``substring`` is not a ``str`` nor a sequence of strings.
+- REQ-3: ``Result.output_contains`` raises ``TypeError`` if ``case_sensitive`` is not a ``bool``.
+- REQ-4: When ``substring`` is a sequence, the method returns ``True`` if **any** element matches the output criteria.
+
+## Errors
+- ``TypeError`` for invalid argument types.
+</pre><p class="path"><code>click-result-contains/</code></p></details></td><td>api_testing</td><td>L2</td><td class="n">7</td><td class="n">2434</td><td class="ok">0.00 &times;1</td><td class="ok">1.00 &times;1</td><td class="n">100%</td></tr></tbody></table></div></section><section aria-labelledby="h-check"><h2 id="h-check">Is each task valid?</h2><div class="scroll"><table class="tasks"><thead><tr><th scope="col">Check (task and outcome validity)</th><th scope="col">completion-enabled</th><th scope="col">parse-bool</th><th scope="col">parse-json-param</th><th scope="col">prompt-int-range</th><th scope="col">result-contains</th></tr></thead><tbody><tr><th scope="row">Every requirement is mapped to a feature test</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr><tr><th scope="row">Feature tests fail without the solution and pass with it</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr><tr><th scope="row">Existing tests are guarded (regression set recorded)</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr><tr><th scope="row">No network while the task runs</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr><tr><th scope="row">Trivial solutions fail (no-op, stub, partial)</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr><tr><th scope="row">Wrong implementations fail (mutants killed over the bar)</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr><tr><th scope="row">Snapshot, canary, secret scan and diff policy are clean</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr><tr><th scope="row">Files are tamper-evident (SHA-256 manifest verifies)</th><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td><td class="ok">pass</td></tr></tbody></table></div><p class="path">Modelled on the Agentic Benchmark Checklist (arXiv 2507.02825). Every answer is read from a file the pipeline wrote; '-' means that file is missing, not that the check passed.</p></section><section aria-labelledby="h-dead"><h2 id="h-dead">Rejected candidates</h2><ul class="graveyard"><li><span class="who">#1 core_logic L1</span> mutation: semantic kill rate 67% below 80%</li><li><span class="who">#2 core_logic L1</span> STATE_C: reference patch fails: [&#x27;tests/test_format_option.py::test_whitespace_is_trimmed_and_preserved_commas&#x27;]</li><li><span class="who">#5 cross_module L3</span> mutation: semantic kill rate 60% below 80%</li></ul></section><section aria-labelledby="h-models"><h2 id="h-models">How models did</h2><p class="empty">No model has attempted these tasks yet. Run <code>codekiln eval &lt;package&gt; &lt;model&gt;</code> to fill this in.</p></section>
+  <footer>Every number above comes from the run ledger, the packaged task folders, or a Harbor job
+    result. Nothing an LLM reported about itself is shown here.</footer>
+</main>
+</body>
+</html>
