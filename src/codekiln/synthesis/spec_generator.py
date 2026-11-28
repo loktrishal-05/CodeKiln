@@ -77,7 +77,11 @@ FORMAT (checked by code):
 5. "task" is kebab-case with at least two words, e.g. "click-json-param".
 6. Import inside the new function, not at the top of the module, any module the file does not already
    import: libraries often test that importing the package stays light (a new top-level `import json`
-   made such a test fail on a real run). Write tests that assert exact values and error cases."""
+   made such a test fail on a real run). Write tests that assert exact values and error cases.
+7. The new code needs at least 3 real decisions (if/else, and/or, comparisons, an error branch) and at
+   least 3 tests that exercise them both ways: tiny one-line features cannot be checked for strength.
+   Tests may only call names and arguments your edits actually add; a test that passes an argument the
+   patch never defines failed a real run."""
 
 _RULES = """\
 Rules (violations are rejected before packaging):

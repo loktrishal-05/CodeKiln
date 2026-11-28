@@ -8,7 +8,7 @@ from test_six_slot_synthesis import _ledger
 
 from codekiln.db import connect
 from codekiln.factory import run_factory
-from codekiln.repair import MAX_EVIDENCE_CHARS, evidence
+from codekiln.repair import MAX_EVIDENCE_CHARS, MAX_REPAIRS, evidence
 from codekiln.synthesis.models import FeatureSpec
 
 PYTEST_OUT = (
@@ -71,10 +71,10 @@ def test_a_rejected_candidate_is_repaired_with_the_real_pytest_failure_then_pack
     assert summary.packaged == ["click-repair-me"] and not summary.rejected
 
 
-def test_a_second_failure_is_final_the_writer_is_asked_once(tmp_path: Path) -> None:
+def test_repairs_are_bounded_then_the_rejection_is_final(tmp_path: Path) -> None:
     writer = Rewriter(repair_works=False)
     summary, repairs = drive(tmp_path, writer)
-    assert len(writer.calls) == 2 and repairs == 1  # first write + exactly one repair
+    assert len(writer.calls) == 1 + MAX_REPAIRS and repairs == MAX_REPAIRS  # the first write, then the bounded repairs
     assert not summary.packaged and "STATE_C" in next(iter(summary.rejected.values()))
 
 
@@ -101,3 +101,24 @@ def test_evidence_is_capped_so_the_request_stays_under_a_token_limit(tmp_path: P
                 " p2p_passed, ctrf_path) VALUES (1, 'C', 0, 0, 0, 0, ?)", (str(log / "results.json"),))
     text = evidence(con, 1, tmp_path, "STATE_C: reference patch fails: ['x']")
     assert len(text) < MAX_EVIDENCE_CHARS + 400
+
+
+def test_an_import_error_with_no_failures_section_is_still_shown_to_the_writer(tmp_path: Path) -> None:
+    """Real run: the patch broke `import click`, pytest ran no test, so there was no FAILURES section and
+    the writer was told nothing. The log's end must be the evidence then."""
+    _ledger(tmp_path, 1)
+    con = connect(str(tmp_path / "k.sqlite"))
+    log = tmp_path / "verifier"
+    log.mkdir()
+    (log / "results.json").write_text("{}")
+    (log / "pytest.txt").write_text("ImportError while loading conftest\nE   ImportError: cannot import name 'x'\n")
+    con.execute("INSERT INTO validation_executions (candidate_id, phase, run_index, exit_code, f2p_passed,"
+                " p2p_passed, ctrf_path) VALUES (1, 'C', 0, 0, 0, 0, ?)", (str(log / "results.json"),))
+    assert "cannot import name 'x'" in evidence(con, 1, tmp_path, "STATE_C: reference patch fails: ['t']")
+
+
+def test_too_few_mutants_tells_the_writer_to_add_real_decisions(tmp_path: Path) -> None:
+    _ledger(tmp_path, 1)
+    con = connect(str(tmp_path / "k.sqlite"))
+    text = evidence(con, 1, tmp_path, "mutation: only 2 semantic mutants could be built (need >= 3)")
+    assert "at least 3 real decisions" in text

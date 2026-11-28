@@ -19,7 +19,7 @@ from codekiln.synthesis.models import SynthesisError, from_dict, validate
 from codekiln.synthesis.runner import build_plan, spec_hash
 from codekiln.validation.blind_reader import lint_instruction
 
-MAX_REPAIRS = 1  # one corrected attempt: a second failure on the same idea is a bad idea, not a typo
+MAX_REPAIRS = 2  # a repair fixes what the last run showed; the next run can show a new problem (real runs did)
 MAX_EVIDENCE_CHARS = 2500  # the request must stay under a provider's per-request token cap
 
 _FAILURES = re.compile(r"=+ FAILURES =+\n(.*?)(?=\n=+ (?:PASSES|short test summary)|\Z)", re.DOTALL)
@@ -35,9 +35,12 @@ def evidence(con: sqlite3.Connection, cid: int, package: Path, reason: str) -> s
     if reason.startswith("STATE_C") and row:
         log = Path(row[0]).with_name("pytest.txt")  # Harbor's verifier dir keeps pytest's own output
         if log.is_file():
-            m = _FAILURES.search(log.read_text(encoding="utf-8", errors="replace"))
-            if m:
-                parts.append("pytest output of the failing run:\n" + m.group(1).strip()[:MAX_EVIDENCE_CHARS])
+            text = log.read_text(encoding="utf-8", errors="replace")
+            m = _FAILURES.search(text)
+            # No FAILURES section means pytest ran no test (an ImportError in conftest, a syntax
+            # error): the end of the log is where the error is, so that is the evidence then.
+            shown = m.group(1) if m else text[-MAX_EVIDENCE_CHARS:]
+            parts.append("pytest output of the failing run:\n" + shown.strip()[:MAX_EVIDENCE_CHARS])
     if reason.startswith("mutation"):
         dossier = package / "mutation_dossier.json"
         if dossier.is_file():
@@ -48,6 +51,10 @@ def evidence(con: sqlite3.Connection, cid: int, package: Path, reason: str) -> s
                              + ", ".join(survivors) + ". Your feature tests must assert exact values, "
                              "both branches and error cases, so that a wrong implementation fails them. "
                              "The reference patch also needs real logic (comparisons, branches) to test.")
+    if "could be built" in reason:  # the probes make wrong variants out of decisions in the new code
+        parts.append("Fewer than 3 wrong variants could be made from the reference patch: it needs at least "
+                     "3 real decisions in the NEW code (if/else, and/or, comparisons, error branches) that "
+                     "your tests then exercise both ways.")
     return "\n\n".join(parts)
 
 
