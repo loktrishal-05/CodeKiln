@@ -37,6 +37,13 @@ _SEMANTIC = (
     ("flip-zero", "0", "1"),
     ("flip-and", " and ", " or "),
     ("flip-lt", " < ", " > "),
+    ("flip-gt", " > ", " < "),
+    ("flip-ge", " >= ", " < "),
+    ("flip-le", " <= ", " > "),
+    ("flip-or", " or ", " and "),
+    ("flip-is-not", " is not ", " is "),
+    ("negate-isinstance", "isinstance(", "not isinstance("),
+    ("flip-add", " + ", " - "),
 )
 
 
@@ -319,16 +326,67 @@ def _partial(prefix: list[str], hunks: list[_Hunk]) -> str:
     return _dump(prefix, [_recount(h)])
 
 
+def _mask(text: str, triple: str) -> tuple[str, str]:
+    """TEXT with comments and string contents blanked (same length); TRIPLE is the open docstring quote."""
+    out: list[str] = []
+    quote, i = "", 0
+    while i < len(text):
+        c = text[i]
+        if triple:
+            end = text.startswith(triple, i)
+            out.append("   " if end else " ")
+            i += 3 if end else 1
+            triple = "" if end else triple
+        elif quote:
+            if c == "\\":
+                out.append("  ")
+                i += 2
+                continue
+            quote = "" if c == quote else quote
+            out.append(" ")
+            i += 1
+        elif c == "#":
+            out.append(" " * (len(text) - i))
+            break
+        elif text.startswith(('"""', "'''"), i):
+            triple = text[i : i + 3]
+            out.append("   ")
+            i += 3
+        else:
+            quote = c if c in "\"'" else ""
+            out.append(" " if quote else c)
+            i += 1
+    return "".join(out)[: len(text)], triple
+
+
+def _code(hunk: _Hunk) -> list[str]:
+    """Per line of HUNK, its code with docstrings, strings and comments blanked ('' for removed lines).
+
+    A mutant that edits a docstring or a comment is identical to the original code, so it can never
+    be killed: a real run scored good tests 0% because the first `False` was inside a docstring."""
+    triple, masked = "", []
+    for line in hunk.lines:
+        if line.startswith("-"):
+            masked.append("")
+            continue
+        text, triple = _mask(line[1:], triple)
+        masked.append(text)
+    return masked
+
+
 def _semantics(prefix: list[str], hunks: list[_Hunk]) -> list[tuple[str, str]]:
     out: list[tuple[str, str]] = []
     for name, old, new in _SEMANTIC:
         if len(out) >= 5:
             break
         for hi, h in enumerate(hunks):
+            code = _code(h)
             for li in _added(h):
-                if old in h.lines[li]:
+                col = code[li].find(old)
+                if col >= 0 and not (old == "isinstance(" and code[li][max(0, col - 4) : col] == "not "):  # not not x == x
                     changed = list(h.lines)
-                    changed[li] = changed[li].replace(old, new, 1)
+                    line = changed[li]
+                    changed[li] = line[: col + 1] + new + line[col + 1 + len(old) :]
                     copy = [*hunks]
                     copy[hi] = _recount(replace(h, lines=tuple(changed)))
                     out.append((name, _dump(prefix, copy)))
@@ -352,11 +410,13 @@ def _semantics(prefix: list[str], hunks: list[_Hunk]) -> list[tuple[str, str]]:
             break
     if len(out) < 3:
         for hi, h in enumerate(hunks):
+            code = _code(h)
             for li in _added(h):
-                m = re.search(r"\b(\w+)=(\s*)(?:True|False|\d+)", h.lines[li])
+                m = re.search(r"\b(\w+)=(\s*)(?:True|False|\d+)", code[li])
                 if m:
                     changed = list(h.lines)
-                    changed[li] = changed[li].replace(m.group(1), f"{m.group(1)}_mutant", 1)
+                    line = changed[li]
+                    changed[li] = line[: m.end(1) + 1] + "_mutant" + line[m.end(1) + 1 :]
                     copy = [*hunks]
                     copy[hi] = _recount(replace(h, lines=tuple(changed)))
                     out.append(("rename-param", _dump(prefix, copy)))

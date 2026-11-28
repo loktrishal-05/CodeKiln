@@ -160,3 +160,41 @@ def test_mutants_of_a_realistic_diff_really_apply(tmp_path: Path) -> None:
         patch = tmp_path / "mutant.diff"
         patch.write_text(m.diff, newline="")
         git("apply", "--check", str(patch))  # raises CalledProcessError on a corrupt patch
+
+
+def test_semantic_mutants_never_edit_a_docstring_or_a_comment() -> None:
+    """Real run: the first `False` of a good patch was in its docstring, so the 'mutant' equalled the
+    original, could not be killed, and good tests scored 0%. Only code may be mutated."""
+    diff = (
+        "diff --git a/src/m.py b/src/m.py\n--- a/src/m.py\n+++ b/src/m.py\n@@ -1,0 +1,9 @@\n"
+        "+def f(x, strict=False):\n"
+        '+    """Return x; strict defaults to ``False`` and 1 means one."""\n'
+        "+    # True here is only a comment, x == 0 as well\n"
+        "+    msg = 'x != 1 and True'\n"
+        "+    if strict:\n"
+        "+        return None\n"
+        "+    return x\n"
+    )
+    sem = [m.diff for m in build_mutants(diff) if m.kind == "semantic"]
+    assert sem, "the code line `strict=False` still gives mutants"
+    for d in sem:
+        body = [line for line in d.splitlines() if line.startswith("+") and not line.startswith("+++")]
+        assert body[1].endswith('1 means one."""') and "``False``" in body[1]  # docstring untouched
+        assert body[2] == "+    # True here is only a comment, x == 0 as well"
+        assert body[3] == "+    msg = 'x != 1 and True'"
+
+
+def test_patches_built_from_decisions_not_literals_still_get_enough_mutants() -> None:
+    """Real run: a patch of isinstance/or/>= decisions had one literal, so only 2 mutants could be built."""
+    diff = (
+        "diff --git a/src/m.py b/src/m.py\n--- a/src/m.py\n+++ b/src/m.py\n@@ -1,0 +1,8 @@\n"
+        "+def f(value, limit):\n"
+        "+    ok = isinstance(limit, int)\n"
+        "+    if not isinstance(value, str) or value is not None:\n"
+        "+        raise TypeError(value)\n"
+        "+    if len(value) >= limit:\n"
+        "+        return value[:limit]\n"
+        "+    return value\n"
+    )
+    names = {m.name for m in build_mutants(diff) if m.kind == "semantic"}
+    assert len(names) >= 3 and "semantic-negate-isinstance" in names
