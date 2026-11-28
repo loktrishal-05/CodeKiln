@@ -1,0 +1,62 @@
+%%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280"}}}%%
+flowchart TB
+  OP(("Factory<br/>operator")):::actor
+  JUDGE(("Judges<br/>and agents")):::actor
+
+  subgraph HOST["Host control plane  -  holds the secrets, makes every decision"]
+    DRIVER["Factory driver<br/>resumable state machine<br/>ledger status picks the next stage"]:::core
+    PLAN["Planner<br/>import graph, 5 categories,<br/>diversity guard, L1-L3 dial"]:::intake
+    SYNTH["Synthesizer<br/>Repo Scout context, LLM writer,<br/>edit builder, evidence-based repair"]:::synth
+    STATIC["Static gates<br/>validate, requirement-test audit,<br/>blind-reader lint"]:::trust
+    VALID["Validators<br/>3-state gate, mutation probes,<br/>red team, isolated verifier"]:::trust
+    SEAL["Sealer<br/>scrub, receipt, SHA-256 manifest,<br/>atomic promote"]:::pack
+  end
+
+  subgraph EXEC["Execution plane  -  untrusted code, throwaway containers, no network"]
+    HARBOR["Harbor 0.25 runner<br/>nop, oracle and mutant trials"]:::exec
+    VERIFIER["Hardened verifier<br/>network none, caps dropped,<br/>resource limits"]:::exec
+  end
+
+  subgraph STORES["State and artifacts"]
+    LEDGER[("Factory ledger<br/>SQLite: runs, candidates, trials")]:::state
+    BILLING[("Billing ledger<br/>append-only, hard budget cap")]:::state
+    PACKAGES["Sealed task packages<br/>samples/"]:::pack
+    DASH["Offline dashboard<br/>funnel, variation matrix,<br/>validity checklist"]:::pack
+  end
+
+  REPO{{"Target repository<br/>pallets/click @ pinned commit"}}:::ext
+  MODEL{{"Chat model service<br/>OpenAI-compatible, host-only key"}}:::ext
+  DOCKER{{"Docker<br/>sandbox engine"}}:::ext
+
+  OP -->|"runs codekiln factory"| DRIVER
+  DRIVER -->|"plans slots"| PLAN
+  PLAN -->|"clones, never executes"| REPO
+  DRIVER -->|"asks for a feature"| SYNTH
+  SYNTH -->|"proposes only"| MODEL
+  SYNTH -->|"spec and patch"| STATIC
+  STATIC -->|"package written"| VALID
+  VALID <-->|"runs trials and reads per-test results"| HARBOR
+  VALID -->|"grades a diff"| VERIFIER
+  VALID -.->|"failure evidence, max 2 repairs"| SYNTH
+  VALID -->|"all gates pass"| SEAL
+  SEAL -->|"promotes"| PACKAGES
+  HARBOR -->|"builds and runs"| DOCKER
+  VERIFIER -->|"runs"| DOCKER
+  DRIVER <-->|"every transition"| LEDGER
+  SYNTH -.->|"every paid call"| BILLING
+  LEDGER -->|"codekiln report reads"| DASH
+  PACKAGES -->|"and the packages"| DASH
+  JUDGE -->|"re-run nop and oracle"| PACKAGES
+
+  classDef actor fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+  classDef core fill:#e0e7ff,stroke:#4f46e5,color:#312e81
+  classDef intake fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+  classDef synth fill:#fef3c7,stroke:#f59e0b,color:#78350f
+  classDef trust fill:#d1fae5,stroke:#10b981,color:#064e3b
+  classDef pack fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+  classDef exec fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef state fill:#e0e7ff,stroke:#6366f1,color:#312e81
+  classDef ext fill:#e0e7ff,stroke:#4f46e5,color:#312e81
+  style HOST fill:#f7f7f7,stroke:#d4d4d8
+  style EXEC fill:#f7f7f7,stroke:#d4d4d8
+  style STORES fill:#f7f7f7,stroke:#d4d4d8

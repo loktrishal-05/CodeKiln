@@ -1,0 +1,60 @@
+%%{init: {"theme": "base", "themeVariables": {"lineColor": "#6b7280"}}}%%
+flowchart TB
+  OP(("Factory<br/>operator")):::actor
+
+  subgraph HOST["Host control plane"]
+    CLI["CLI<br/>codekiln factory REPO --commit SHA"]:::intake
+    PLAN["Planner<br/>slots, categories, diversity, L1-L3"]:::intake
+    DRIVER["Factory driver<br/>picks the stage from ledger status"]:::core
+    WRITER["LLM writer<br/>Repo Scout context in the prompt"]:::synth
+    EDITS["Edit builder<br/>diff built from the real files"]:::synth
+    STATIC["Static gates<br/>validate, RTM audit, blind reader"]:::trust
+    REPAIR["Repair<br/>shows the real failure, max 2"]:::synth
+    SEAL["Sealer<br/>scrub, receipt, manifest, promote"]:::pack
+  end
+
+  MODEL{{"Chat model service"}}:::ext
+
+  subgraph EXEC["Execution plane: Harbor sandboxes, no network"]
+    GATE["State A x1, B x3, C x3<br/>nop and oracle trials"]:::exec
+    PROBES["Mutation probes<br/>wrong solutions must be caught"]:::exec
+    RED["Red team<br/>4 cheat attempts per package"]:::exec
+  end
+
+  subgraph STORE["State and artifacts"]
+    LEDGER[("Ledger<br/>status, trials, spend")]:::state
+    PKG["Sealed package<br/>manifest, receipt, audit"]:::pack
+    DASH["Dashboard<br/>funnel, matrix, checklist"]:::pack
+  end
+
+  OP -->|"1  starts a run"| CLI
+  CLI -->|"2  clones and pins the commit"| PLAN
+  PLAN -->|"3  records DIVERSITY_OK slots"| LEDGER
+  CLI -->|"4  drives each candidate"| DRIVER
+  DRIVER -->|"5  slot plan"| WRITER
+  WRITER <-->|"6  prompt, repo text wrapped  /  7  spec JSON with edits"| MODEL
+  WRITER -->|"8  edits"| EDITS
+  EDITS -->|"9  diff proved with git apply --check"| STATIC
+  STATIC -->|"10  package emitted, BLIND_READER_OK"| LEDGER
+  DRIVER <-->|"11  runs the package  /  12  per-test results"| GATE
+  DRIVER <-->|"13  runs mutants  /  14  kill rate at least 80%"| PROBES
+  DRIVER <-->|"15  runs cheats  /  16  every cheat must score 0.0"| RED
+  DRIVER -->|"17  on a failure"| REPAIR
+  REPAIR -->|"18  evidence goes back to the writer"| WRITER
+  DRIVER -->|"19  all gates pass"| SEAL
+  SEAL -->|"20  atomic promote"| PKG
+  SEAL -->|"21  PACKAGED"| LEDGER
+  LEDGER -->|"22  renders"| DASH
+
+  classDef actor fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+  classDef core fill:#e0e7ff,stroke:#4f46e5,color:#312e81
+  classDef intake fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a
+  classDef synth fill:#fef3c7,stroke:#f59e0b,color:#78350f
+  classDef trust fill:#d1fae5,stroke:#10b981,color:#064e3b
+  classDef pack fill:#fee2e2,stroke:#ef4444,color:#7f1d1d
+  classDef exec fill:#d1fae5,stroke:#059669,color:#064e3b
+  classDef state fill:#e0e7ff,stroke:#6366f1,color:#312e81
+  classDef ext fill:#e0e7ff,stroke:#4f46e5,color:#312e81
+  style HOST fill:#f7f7f7,stroke:#d4d4d8
+  style EXEC fill:#f7f7f7,stroke:#d4d4d8
+  style STORE fill:#f7f7f7,stroke:#d4d4d8
